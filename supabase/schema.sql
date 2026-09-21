@@ -159,6 +159,7 @@ create policy answers_update on answers for update using (
   and exists (select 1 from episodes e where e.id = episode_id and e.status = 'open')
 ) with check (
   player_id = current_player_id()
+  and exists (select 1 from episodes e where e.id = episode_id and e.status = 'open')
 );
 
 create policy bonus_answers_select on bonus_answers for select using (
@@ -184,9 +185,16 @@ create policy bonus_answers_update on bonus_answers for update using (
   )
 ) with check (
   player_id = current_player_id()
+  and exists (
+    select 1 from bonus_questions bq join episodes e on e.id = bq.episode_id
+    where bq.id = bonus_question_id and e.status = 'open'
+  )
 );
 
 create policy scores_select on scores for select using (auth.role() = 'authenticated');
 create policy scores_write on scores for all using (is_admin()) with check (is_admin());
 
-create policy admins_select on admins for select using (is_admin());
+-- Not `using (is_admin())`: is_admin() queries this table, so a policy that
+-- calls is_admin() on this table would recurse infinitely. Self-row visibility
+-- is all is_admin() actually needs (it looks up the current user's own email).
+create policy admins_select on admins for select using (email = auth.jwt() ->> 'email');

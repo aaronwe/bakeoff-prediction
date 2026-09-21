@@ -348,6 +348,7 @@ create policy answers_update on answers for update using (
   and exists (select 1 from episodes e where e.id = episode_id and e.status = 'open')
 ) with check (
   player_id = current_player_id()
+  and exists (select 1 from episodes e where e.id = episode_id and e.status = 'open')
 );
 
 create policy bonus_answers_select on bonus_answers for select using (
@@ -373,13 +374,22 @@ create policy bonus_answers_update on bonus_answers for update using (
   )
 ) with check (
   player_id = current_player_id()
+  and exists (
+    select 1 from bonus_questions bq join episodes e on e.id = bq.episode_id
+    where bq.id = bonus_question_id and e.status = 'open'
+  )
 );
 
 create policy scores_select on scores for select using (auth.role() = 'authenticated');
 create policy scores_write on scores for all using (is_admin()) with check (is_admin());
 
-create policy admins_select on admins for select using (is_admin());
+-- Not `using (is_admin())`: is_admin() queries this table, so a policy that
+-- calls is_admin() on this table would recurse infinitely. Self-row visibility
+-- is all is_admin() actually needs (it looks up the current user's own email).
+create policy admins_select on admins for select using (email = auth.jwt() ->> 'email');
 ```
+
+(Two bugs found and fixed during Task 2 implementation review, 2026-09-21: (1) `admins_select` originally used `is_admin()`, which itself queries `admins` — since `admins` has RLS enabled, that query re-triggers `admins_select`, causing infinite recursion that would break every admin-gated policy in the schema. Fixed by making `admins_select` a direct self-row check instead. (2) `answers_update`/`bonus_answers_update`'s `with check` clauses didn't re-verify the episode was still `open` for the *new* row values, only the `using` clause checked the existing row — a gap versus "players can edit answers only while open." Fixed by adding the same episode-status check to both `with check` clauses.)
 
 - [ ] **Step 2: Run it against your Supabase project**
 
