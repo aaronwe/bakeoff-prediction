@@ -2457,6 +2457,18 @@ function AnswerKeyAndScore({ episode, bonusQuestions, allBakers, onChanged }) {
   const [summary, setSummary] = useState(null)
   const [scoring, setScoring] = useState(false)
 
+  // AdminEpisode renders this component unkeyed, so navigating between
+  // episode numbers (a param change, not a remount — same as
+  // IntroNoteAndLock above) would otherwise leave these fields showing the
+  // previous episode's answer key/bonus answers instead of the new one's.
+  useEffect(() => {
+    setTechnicalWinner(episode.technical_winner_baker_id ?? '')
+    setStarBaker(episode.star_baker_id ?? '')
+    setEliminated(episode.eliminated_baker_id ?? '')
+    setHandshakeCount(episode.handshake_count ?? '')
+    setBonusCorrect(Object.fromEntries(bonusQuestions.map((bq) => [bq.id, bq.correct_answer ?? ''])))
+  }, [episode.id, episode.technical_winner_baker_id, episode.star_baker_id, episode.eliminated_baker_id, episode.handshake_count, bonusQuestions])
+
   async function handleSubmit(e) {
     e.preventDefault()
     setScoring(true)
@@ -2611,14 +2623,36 @@ function ManualOverrides({ episode, players }) {
   const [scores, setScores] = useState([])
   const [error, setError] = useState(null)
 
+  // Guarded like the other data-loading effects in this file: episode.id
+  // can change while this component stays mounted (navigating between
+  // episode numbers), so an unguarded effect risks a slower, stale fetch
+  // for the old episode landing after the new one's and clobbering it. The
+  // fetch error is also surfaced instead of silently leaving scores == [].
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const { data, error: fetchError } = await supabase.from('scores').select('*').eq('episode_id', episode.id)
+      if (cancelled) return
+      if (fetchError) {
+        setError(fetchError.message)
+        return
+      }
+      setScores(data ?? [])
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [episode.id])
+
   async function reload() {
-    const { data } = await supabase.from('scores').select('*').eq('episode_id', episode.id)
+    const { data, error: fetchError } = await supabase.from('scores').select('*').eq('episode_id', episode.id)
+    if (fetchError) {
+      setError(fetchError.message)
+      return
+    }
     setScores(data ?? [])
   }
-
-  useEffect(() => {
-    reload()
-  }, [episode.id])
 
   async function handleOverride(playerId, newTotal) {
     setError(null)
