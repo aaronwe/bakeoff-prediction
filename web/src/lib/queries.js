@@ -59,3 +59,16 @@ export async function fetchMyBonusAnswers(bonusQuestionIds, playerId) {
   if (error) throw error
   return data
 }
+
+export async function fetchLeaderboardData() {
+  const [{ data: players, error: playersError }, { data: scores, error: scoresError }, { data: episodes, error: episodesError }] =
+    await Promise.all([
+      supabase.from('players').select('*'),
+      supabase.from('scores').select('*'),
+      supabase.from('episodes').select('*').eq('status', 'scored').order('number'),
+    ])
+  if (playersError) throw playersError
+  if (scoresError) throw scoresError
+  if (episodesError) throw episodesError
+  return { players, scores, episodes }
+}
