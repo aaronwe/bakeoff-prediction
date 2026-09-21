@@ -6,7 +6,7 @@
 
 **Architecture:** A static React (Vite) SPA (`web/`) talking directly to Supabase (Postgres + Auth + RLS) for all player and admin interaction, hosted on GitHub Pages. A separate set of Node scripts (`scripts/`) run on a schedule via GitHub Actions using a Supabase service-role key to send weekly emails (via Gmail SMTP) and back up score data to CSV. No custom server — Supabase and GitHub Actions are the entire backend.
 
-**Tech Stack:** React 18 + Vite + react-router-dom (HashRouter) + @supabase/supabase-js v2, vanilla CSS. Node 20 + nodemailer for scripts. Vitest for unit tests in both `web/` and `scripts/`. Supabase Postgres with row-level security. GitHub Actions for cron jobs and deployment.
+**Tech Stack:** React 19 (via `npm create vite@latest -- --template react`, which scaffolds current React — no version was pinned by this plan, so it picked up 19.x; none of this plan's components rely on React-18-only patterns like `defaultProps` on function components) + Vite + react-router-dom (HashRouter) + @supabase/supabase-js v2, vanilla CSS. Node 20 + nodemailer (^10.x — see Task 1 nodemailer/vitest version note) for scripts. Vitest for unit tests in both `web/` and `scripts/`. Supabase Postgres with row-level security. GitHub Actions for cron jobs and deployment.
 
 ---
 
