@@ -3149,6 +3149,8 @@ git commit -m "Add weekly email send/remind decision logic and script"
 
 - [ ] **Step 1: Write the Wednesday reminder script**
 
+(Fixed during Task 14, 2026-09-21: added error checking on Supabase queries for `episodes` and `admins` to ensure database failures throw instead of failing silently.)
+
 Create `scripts/send-scoring-reminder.mjs`:
 
 ```js
@@ -3158,7 +3160,7 @@ import { sendMail } from './lib/mailer.mjs'
 import { buildAdminReminderHtml } from './lib/emailTemplates.mjs'
 
 async function main() {
-  const { data: episode } = await supabaseAdmin
+  const { data: episode, error: episodeError } = await supabaseAdmin
     .from('episodes')
     .select('*')
     .eq('status', 'open')
@@ -3166,12 +3168,16 @@ async function main() {
     .limit(1)
     .maybeSingle()
 
+  if (episodeError) throw episodeError
+
   if (!episode) {
     console.log('No open episode — nothing to score.')
     return
   }
 
-  const { data: admins } = await supabaseAdmin.from('admins').select('email')
+  const { data: admins, error: adminsError } = await supabaseAdmin.from('admins').select('email')
+  if (adminsError) throw adminsError
+
   const html = buildAdminReminderHtml({ episode, kind: 'scoring-day' })
   for (const admin of admins ?? []) {
     await sendMail({ to: admin.email, subject: 'Bake Off Pool: scoring day', html, text: html.replace(/<[^>]+>/g, '') })
@@ -3231,7 +3237,7 @@ Create `scripts/lib/csv.mjs`:
 function escapeCsvField(value) {
   if (value === null || value === undefined) return ''
   const s = String(value)
-  if (/[",\n]/.test(s)) {
+  if (/[",\r\n]/.test(s)) {
     return `"${s.replace(/"/g, '""')}"`
   }
   return s
@@ -3255,29 +3261,45 @@ Expected: PASS — all 3 tests green.
 
 - [ ] **Step 6: Write the backup script**
 
+(Fixed during Task 14, 2026-09-21: added error checking on all 6 Supabase queries (`scores`, `answers`, `bonus_answers`, `players`, `episodes`, `admins`) to ensure query failures throw instead of silently generating incomplete CSVs, and resolved `backupDir` repo root relative to `import.meta.url` so the backup path is `<repo-root>/backups/<dateStr>` regardless of process working directory.)
+
 Create `scripts/backup-scores.mjs`:
 
 ```js
 import 'dotenv/config'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { supabaseAdmin } from './lib/supabaseAdmin.mjs'
 import { sendMail } from './lib/mailer.mjs'
 import { toCsv } from './lib/csv.mjs'
 
 async function main() {
-  const [{ data: scores }, { data: answers }, { data: bonusAnswers }, { data: players }, { data: episodes }, { data: admins }] =
-    await Promise.all([
-      supabaseAdmin.from('scores').select('*'),
-      supabaseAdmin.from('answers').select('*'),
-      supabaseAdmin.from('bonus_answers').select('*'),
-      supabaseAdmin.from('players').select('*'),
-      supabaseAdmin.from('episodes').select('*'),
-      supabaseAdmin.from('admins').select('email'),
-    ])
+  const [
+    { data: scores, error: scoresError },
+    { data: answers, error: answersError },
+    { data: bonusAnswers, error: bonusAnswersError },
+    { data: players, error: playersError },
+    { data: episodes, error: episodesError },
+    { data: admins, error: adminsError },
+  ] = await Promise.all([
+    supabaseAdmin.from('scores').select('*'),
+    supabaseAdmin.from('answers').select('*'),
+    supabaseAdmin.from('bonus_answers').select('*'),
+    supabaseAdmin.from('players').select('*'),
+    supabaseAdmin.from('episodes').select('*'),
+    supabaseAdmin.from('admins').select('email'),
+  ])
 
-  const playerName = (id) => players.find((p) => p.id === id)?.display_name ?? id
-  const episodeNumber = (id) => episodes.find((e) => e.id === id)?.number ?? id
+  if (scoresError) throw scoresError
+  if (answersError) throw answersError
+  if (bonusAnswersError) throw bonusAnswersError
+  if (playersError) throw playersError
+  if (episodesError) throw episodesError
+  if (adminsError) throw adminsError
+
+  const playerName = (id) => (players ?? []).find((p) => p.id === id)?.display_name ?? id
+  const episodeNumber = (id) => (episodes ?? []).find((e) => e.id === id)?.number ?? id
 
   const scoresRows = (scores ?? []).map((s) => ({
     episode: episodeNumber(s.episode_id),
@@ -3305,7 +3327,8 @@ async function main() {
   const bonusAnswersCsv = toCsv(bonusAnswersRows, ['bonus_question_id', 'player', 'answer_text'])
 
   const dateStr = new Date().toISOString().slice(0, 10)
-  const backupDir = path.join(process.cwd(), '..', 'backups', dateStr)
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const backupDir = path.join(repoRoot, 'backups', dateStr)
   await mkdir(backupDir, { recursive: true })
   await writeFile(path.join(backupDir, 'scores.csv'), scoresCsv)
   await writeFile(path.join(backupDir, 'answers.csv'), answersCsv)
