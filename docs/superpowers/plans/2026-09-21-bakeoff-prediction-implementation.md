@@ -444,11 +444,31 @@ create policy scores_write on scores for all using (is_admin()) with check (is_a
 -- calls is_admin() on this table would recurse infinitely. Self-row visibility
 -- is all is_admin() actually needs (it looks up the current user's own email).
 create policy admins_select on admins for select using (email = auth.jwt() ->> 'email');
+
+-- ── Public views ─────────────────────────────────────────────
+
+-- players_select deliberately restricts full player rows (which include
+-- email) to the caller's own row or an admin. But the leaderboard and
+-- episode reveal pages need every player's display_name, not just the
+-- caller's own. This view exposes only the safe columns to solve that
+-- without loosening players_select itself (which would expose every
+-- player's email address to every other player).
+--
+-- This works specifically because it's a plain view (no `security_invoker`),
+-- so it runs as its owner rather than the querying user — and table owners
+-- bypass RLS by default (schema.sql never sets FORCE ROW LEVEL SECURITY on
+-- `players`), so the view sees every row regardless of players_select.
+create view players_public as
+select id, display_name from players;
+
+grant select on players_public to authenticated;
 ```
 
 (Three bugs found and fixed during Task 2 implementation review, 2026-09-21: (1) `admins_select` originally used `is_admin()`, which itself queries `admins` — since `admins` has RLS enabled, that query re-triggers `admins_select`, causing infinite recursion that would break every admin-gated policy in the schema. Fixed by making `admins_select` a direct self-row check instead. (2) `answers_update`/`bonus_answers_update`'s `with check` clauses didn't re-verify the episode was still `open` for the *new* row values, only the `using` clause checked the existing row — a gap versus "players can edit answers only while open." Fixed by adding the same episode-status check to both `with check` clauses. (3) **Critical:** RLS is row-level, not column-level — once an episode is `open` (not `draft`), `episodes_select` exposes the *entire* row to every player, including the answer-key columns (`technical_winner_baker_id`, `star_baker_id`, `eliminated_baker_id`, `handshake_count`), and the same was true of `bonus_questions.correct_answer`. Since the admin workflow originally had "enter the answer key" and "score" as two separate persisted steps, any answer key entered before the admin clicked "Score" would be readable by any player via the browser's already-loaded Supabase client — who could then edit their own still-`open` answer to match before scoring ran, i.e. a real path to a guaranteed-perfect score, not just a spoiler. Fixed with the `episodes_answer_key_only_when_scored` CHECK constraint and the `bonus_questions_correct_answer_guard` trigger above, which make it impossible for these columns to hold a value unless the episode is already `scored` — enforced by Postgres itself, not just app code. This requires the admin UI to write the answer key and flip status to `scored` as a single atomic action rather than two separate saves; **Task 11 below reflects this** (a combined "Enter answer key & score" step, not a separate persisted "save answer key" step).)
 
 (Additional polish from the Task 2 code quality review, same date: the `using`/`with check` "episode is open" subquery that had already caused one bug was duplicated four times across `answers_insert`/`answers_update`/`bonus_answers_insert`/`bonus_answers_update` — extracted into `episode_is_open()`/`bonus_question_is_open()` helper functions instead, both called from all four policies. Added `set search_path = public` to all four helper functions per standard Supabase-advisor guidance. Added a comment explaining why `technical_winner_baker_id`/`star_baker_id`/`eliminated_baker_id` deliberately have no `on delete` action — there's no "delete a baker" feature in this plan, so blocking such a delete rather than cascading/nulling is the safer default for the manual-SQL-editor case where it could matter.)
+
+(**Critical fix found during Task 6's code quality review**, 2026-09-21: `players_select` restricts full player rows — including `email` — to the caller's own row or an admin. That's correct for the base table, but it silently broke the leaderboard (Task 6) and would have broken the episode reveal page (Task 7) too: both need every player's `display_name` to render a table, and both did `supabase.from('players').select('*')`, which under this policy returns only the signed-in player's own row to anyone who isn't an admin — no error, just a leaderboard with one row (yourself). Fixed with a `players_public` view exposing only `id`/`display_name` to every authenticated user, without loosening `players_select` itself (which would've exposed every player's email address to every other player). Task 6 and Task 7's `fetch*` helpers below select from `players_public`, not `players`.)
 
 - [ ] **Step 2: Run it against your Supabase project**
 
@@ -1460,9 +1480,14 @@ Add to `web/src/lib/queries.js`:
 
 ```js
 export async function fetchLeaderboardData() {
+  // players_public, not players: players_select's RLS restricts full player
+  // rows (which include email) to the caller's own row or an admin, so a
+  // plain `players` select here would silently return just the signed-in
+  // player's own row to everyone else. players_public (see schema.sql)
+  // exposes every player's id/display_name without that restriction.
   const [{ data: players, error: playersError }, { data: scores, error: scoresError }, { data: episodes, error: episodesError }] =
     await Promise.all([
-      supabase.from('players').select('*'),
+      supabase.from('players_public').select('*'),
       supabase.from('scores').select('*'),
       supabase.from('episodes').select('*').eq('status', 'scored').order('number'),
     ])
@@ -1609,9 +1634,12 @@ export async function fetchEpisodeRevealData(episodeNumber) {
     .single()
   if (episodeError) throw episodeError
 
+  // players_public, not players — see the comment in fetchLeaderboardData
+  // above: a plain `players` select here would only return the caller's own
+  // row to a non-admin player under players_select's RLS.
   const results = await Promise.all([
     supabase.from('bakers').select('*'),
-    supabase.from('players').select('*'),
+    supabase.from('players_public').select('*'),
     supabase.from('answers').select('*').eq('episode_id', episode.id),
     supabase.from('bonus_questions').select('*').eq('episode_id', episode.id),
     supabase.from('bonus_answers').select('*, bonus_questions!inner(episode_id)').eq('bonus_questions.episode_id', episode.id),

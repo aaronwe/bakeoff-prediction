@@ -61,9 +61,14 @@ export async function fetchMyBonusAnswers(bonusQuestionIds, playerId) {
 }
 
 export async function fetchLeaderboardData() {
+  // players_public, not players: players_select's RLS restricts full player
+  // rows (which include email) to the caller's own row or an admin, so a
+  // plain `players` select here would silently return just the signed-in
+  // player's own row to everyone else. players_public (see schema.sql)
+  // exposes every player's id/display_name without that restriction.
   const [{ data: players, error: playersError }, { data: scores, error: scoresError }, { data: episodes, error: episodesError }] =
     await Promise.all([
-      supabase.from('players').select('*'),
+      supabase.from('players_public').select('*'),
       supabase.from('scores').select('*'),
       supabase.from('episodes').select('*').eq('status', 'scored').order('number'),
     ])

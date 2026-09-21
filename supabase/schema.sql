@@ -255,3 +255,21 @@ create policy scores_write on scores for all using (is_admin()) with check (is_a
 -- calls is_admin() on this table would recurse infinitely. Self-row visibility
 -- is all is_admin() actually needs (it looks up the current user's own email).
 create policy admins_select on admins for select using (email = auth.jwt() ->> 'email');
+
+-- ── Public views ─────────────────────────────────────────────
+
+-- players_select deliberately restricts full player rows (which include
+-- email) to the caller's own row or an admin. But the leaderboard and
+-- episode reveal pages need every player's display_name, not just the
+-- caller's own. This view exposes only the safe columns to solve that
+-- without loosening players_select itself (which would expose every
+-- player's email address to every other player).
+--
+-- This works specifically because it's a plain view (no `security_invoker`),
+-- so it runs as its owner rather than the querying user — and table owners
+-- bypass RLS by default (schema.sql never sets FORCE ROW LEVEL SECURITY on
+-- `players`), so the view sees every row regardless of players_select.
+create view players_public as
+select id, display_name from players;
+
+grant select on players_public to authenticated;
