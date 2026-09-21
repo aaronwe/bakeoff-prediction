@@ -941,6 +941,32 @@ describe('computeScoreForPlayer', () => {
     expect(result.total).toBe(0)
   })
 
+  // Locks in the `&&` guards in computeScoreForPlayer: an unset answer key
+  // (episode.*_id null) and a skipped question (answer.*_id null) must not
+  // score as a match just because null === null.
+  it('does not award points when both the answer key and the player pick are unset', () => {
+    const episodeWithNoAnswerKey = {
+      technical_winner_baker_id: null,
+      star_baker_id: null,
+      eliminated_baker_id: null,
+      handshake_count: 5,
+    }
+    const answer = {
+      technical_pick_id: null,
+      star_baker_pick_id: null,
+      eliminated_pick_id: null,
+      handshake_guess: 5,
+    }
+    const result = computeScoreForPlayer({
+      episode: episodeWithNoAnswerKey,
+      answer,
+      bonusQuestions: [],
+      bonusAnswers: [],
+    })
+    expect(result.breakdown).toEqual({ technical: 0, star_baker: 0, eliminated: 0, handshake: 2 })
+    expect(result.total).toBe(2)
+  })
+
   it('includes bonus question points keyed by bonus question id', () => {
     const bonusQuestions = [
       { id: 'bq-1', correct_answer: 'Priya', points: 2 },
@@ -994,7 +1020,15 @@ export function scoreBonusAnswer(bonusQuestion, answerText) {
     : 0
 }
 
+// bonusAnswers must already be scoped to the player being scored (i.e. every
+// row's player_id matches `answer`'s player) — this function doesn't filter
+// by player itself, so passing an unfiltered/multi-player array would
+// silently cross-contaminate bonus scores between players.
 export function computeScoreForPlayer({ episode, answer, bonusQuestions, bonusAnswers }) {
+  // The `&&` guards below are load-bearing, not redundant: an unset answer
+  // key (episode.*_id is null) and a skipped question (answer.*_id is null)
+  // would otherwise both be null and a bare `===` would wrongly score it as
+  // a match. `&&` short-circuits that null-vs-null case to 0.
   const breakdown = {
     technical: answer.technical_pick_id && answer.technical_pick_id === episode.technical_winner_baker_id ? 1 : 0,
     star_baker: answer.star_baker_pick_id && answer.star_baker_pick_id === episode.star_baker_id ? 1 : 0,
@@ -1019,7 +1053,7 @@ cd web
 npx vitest run src/lib/scoring.test.js
 ```
 
-Expected: PASS — all 10 tests green.
+Expected: PASS — all tests green (17: the 10 above plus 7 added during Task 4 implementation/review for edge cases — zero-as-a-valid-value, empty-string answers, an unanswered/ungraded bonus question, and a null-answer-key-vs-null-player-pick case — that the original 10 didn't cover).
 
 - [ ] **Step 6: Commit**
 

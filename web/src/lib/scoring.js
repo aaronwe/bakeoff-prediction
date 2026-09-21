@@ -14,7 +14,15 @@ export function scoreBonusAnswer(bonusQuestion, answerText) {
     : 0
 }
 
+// bonusAnswers must already be scoped to the player being scored (i.e. every
+// row's player_id matches `answer`'s player) — this function doesn't filter
+// by player itself, so passing an unfiltered/multi-player array would
+// silently cross-contaminate bonus scores between players.
 export function computeScoreForPlayer({ episode, answer, bonusQuestions, bonusAnswers }) {
+  // The `&&` guards below are load-bearing, not redundant: an unset answer
+  // key (episode.*_id is null) and a skipped question (answer.*_id is null)
+  // would otherwise both be null and a bare `===` would wrongly score it as
+  // a match. `&&` short-circuits that null-vs-null case to 0.
   const breakdown = {
     technical: answer.technical_pick_id && answer.technical_pick_id === episode.technical_winner_baker_id ? 1 : 0,
     star_baker: answer.star_baker_pick_id && answer.star_baker_pick_id === episode.star_baker_id ? 1 : 0,

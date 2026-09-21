@@ -99,6 +99,32 @@ describe('computeScoreForPlayer', () => {
     expect(result.total).toBe(0)
   })
 
+  // Locks in the `&&` guards in computeScoreForPlayer: an unset answer key
+  // (episode.*_id null) and a skipped question (answer.*_id null) must not
+  // score as a match just because null === null.
+  it('does not award points when both the answer key and the player pick are unset', () => {
+    const episodeWithNoAnswerKey = {
+      technical_winner_baker_id: null,
+      star_baker_id: null,
+      eliminated_baker_id: null,
+      handshake_count: 5,
+    }
+    const answer = {
+      technical_pick_id: null,
+      star_baker_pick_id: null,
+      eliminated_pick_id: null,
+      handshake_guess: 5,
+    }
+    const result = computeScoreForPlayer({
+      episode: episodeWithNoAnswerKey,
+      answer,
+      bonusQuestions: [],
+      bonusAnswers: [],
+    })
+    expect(result.breakdown).toEqual({ technical: 0, star_baker: 0, eliminated: 0, handshake: 2 })
+    expect(result.total).toBe(2)
+  })
+
   it('includes bonus question points keyed by bonus question id', () => {
     const bonusQuestions = [
       { id: 'bq-1', correct_answer: 'Priya', points: 2 },
