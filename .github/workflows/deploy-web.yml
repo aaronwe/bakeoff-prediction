@@ -25,7 +25,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Matches the scripts/ workflows: @supabase/supabase-js (also a
+          # web/ dependency) declares engines.node >= 22.0.0.
+          node-version: 22
 
       - name: Install dependencies
         working-directory: web

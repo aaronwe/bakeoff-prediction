@@ -5,6 +5,13 @@ on:
     - cron: '0 13 * * 3'
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
+concurrency:
+  group: wednesday-reminder
+  cancel-in-progress: false
+
 jobs:
   remind:
     runs-on: ubuntu-latest
@@ -13,7 +20,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # @supabase/supabase-js declares engines.node >= 22.0.0.
+          node-version: 22
 
       - name: Install script dependencies
         working-directory: scripts

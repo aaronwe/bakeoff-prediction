@@ -8,6 +8,13 @@ on:
 permissions:
   contents: write
 
+# A manual "Send now" run overlapping the scheduled run would otherwise let
+# both fire the email step before either reaches the push, sending real
+# players a duplicate.
+concurrency:
+  group: thursday-send
+  cancel-in-progress: false
+
 jobs:
   send-and-backup:
     runs-on: ubuntu-latest
@@ -16,7 +23,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # @supabase/supabase-js declares engines.node >= 22.0.0; Node 20
+          # can install it (npm only warns) but isn't a version the package
+          # actually supports running under.
+          node-version: 22
 
       - name: Install script dependencies
         working-directory: scripts
@@ -47,4 +57,5 @@ jobs:
           git config user.email "actions@github.com"
           git add backups/
           git diff --cached --quiet || git commit -m "Weekly score backup $(date -u +%Y-%m-%d)"
+          git pull --rebase
           git push

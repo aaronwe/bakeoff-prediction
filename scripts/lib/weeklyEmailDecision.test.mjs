@@ -14,11 +14,28 @@ describe('decideWeeklyAction', () => {
     expect(decideWeeklyAction({ status: 'scored', email_locked_at: '2026-01-01T00:00:00Z' })).toEqual({ action: 'none' })
   })
 
-  it('sends when the open episode is locked', () => {
-    expect(decideWeeklyAction({ status: 'open', email_locked_at: '2026-01-01T00:00:00Z' })).toEqual({ action: 'send' })
+  it('sends when the open episode is locked and not yet sent', () => {
+    expect(
+      decideWeeklyAction({ status: 'open', email_locked_at: '2026-01-01T00:00:00Z', email_sent_at: null }),
+    ).toEqual({ action: 'send' })
   })
 
   it('reminds the admin when the open episode is not locked', () => {
-    expect(decideWeeklyAction({ status: 'open', email_locked_at: null })).toEqual({ action: 'remind' })
+    expect(decideWeeklyAction({ status: 'open', email_locked_at: null, email_sent_at: null })).toEqual({
+      action: 'remind',
+    })
+  })
+
+  // Locks in the duplicate-send guard: an admin using the "Send now" GitHub
+  // Actions link (Task 10) mid-week must not also get emailed again by the
+  // Thursday cron for the same still-open, still-locked episode.
+  it('does nothing when the locked episode has already been sent', () => {
+    expect(
+      decideWeeklyAction({
+        status: 'open',
+        email_locked_at: '2026-01-01T00:00:00Z',
+        email_sent_at: '2026-01-01T00:05:00Z',
+      }),
+    ).toEqual({ action: 'none' })
   })
 })
