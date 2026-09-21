@@ -2457,18 +2457,6 @@ function AnswerKeyAndScore({ episode, bonusQuestions, allBakers, onChanged }) {
   const [summary, setSummary] = useState(null)
   const [scoring, setScoring] = useState(false)
 
-  // AdminEpisode renders this component unkeyed, so navigating between
-  // episode numbers (a param change, not a remount — same as
-  // IntroNoteAndLock above) would otherwise leave these fields showing the
-  // previous episode's answer key/bonus answers instead of the new one's.
-  useEffect(() => {
-    setTechnicalWinner(episode.technical_winner_baker_id ?? '')
-    setStarBaker(episode.star_baker_id ?? '')
-    setEliminated(episode.eliminated_baker_id ?? '')
-    setHandshakeCount(episode.handshake_count ?? '')
-    setBonusCorrect(Object.fromEntries(bonusQuestions.map((bq) => [bq.id, bq.correct_answer ?? ''])))
-  }, [episode.id, episode.technical_winner_baker_id, episode.star_baker_id, episode.eliminated_baker_id, episode.handshake_count, bonusQuestions])
-
   async function handleSubmit(e) {
     e.preventDefault()
     setScoring(true)
@@ -2511,19 +2499,42 @@ function AnswerKeyAndScore({ episode, bonusQuestions, allBakers, onChanged }) {
     }
 
     // Re-fetch rather than reuse local state, so scoring always computes
-    // against exactly what's now in the database.
-    const { data: scoredEpisode } = await supabase.from('episodes').select('*').eq('id', episode.id).single()
-    const { data: scoredBonusQuestions } = await supabase
+    // against exactly what's now in the database. The writes above already
+    // succeeded at this point, so a failure here is a genuine (if unlikely)
+    // fetch error, not a validation case — surface it instead of letting a
+    // missing `data` crash the code below with a TypeError.
+    const { data: scoredEpisode, error: scoredEpisodeError } = await supabase
+      .from('episodes')
+      .select('*')
+      .eq('id', episode.id)
+      .single()
+    const { data: scoredBonusQuestions, error: scoredBonusQuestionsError } = await supabase
       .from('bonus_questions')
       .select('*')
       .eq('episode_id', episode.id)
+    if (scoredEpisodeError || scoredBonusQuestionsError) {
+      setError((scoredEpisodeError ?? scoredBonusQuestionsError).message)
+      setScoring(false)
+      return
+    }
 
-    const { data: answers } = await supabase.from('answers').select('*').eq('episode_id', episode.id)
+    const { data: answers, error: answersError } = await supabase
+      .from('answers')
+      .select('*')
+      .eq('episode_id', episode.id)
     const bonusQuestionIds = (scoredBonusQuestions ?? []).map((bq) => bq.id)
-    const { data: bonusAnswers } = bonusQuestionIds.length
+    const { data: bonusAnswers, error: bonusAnswersError } = bonusQuestionIds.length
       ? await supabase.from('bonus_answers').select('*').in('bonus_question_id', bonusQuestionIds)
-      : { data: [] }
-    const { data: existingScores } = await supabase.from('scores').select('*').eq('episode_id', episode.id)
+      : { data: [], error: null }
+    const { data: existingScores, error: existingScoresError } = await supabase
+      .from('scores')
+      .select('*')
+      .eq('episode_id', episode.id)
+    if (answersError || bonusAnswersError || existingScoresError) {
+      setError((answersError ?? bonusAnswersError ?? existingScoresError).message)
+      setScoring(false)
+      return
+    }
 
     let recomputed = 0
     let preserved = 0
@@ -2619,40 +2630,8 @@ function AnswerKeyAndScore({ episode, bonusQuestions, allBakers, onChanged }) {
 Add this component above `AdminEpisode`:
 
 ```jsx
-function ManualOverrides({ episode, players }) {
-  const [scores, setScores] = useState([])
+function ManualOverrides({ episode, players, scores, onChanged }) {
   const [error, setError] = useState(null)
-
-  // Guarded like the other data-loading effects in this file: episode.id
-  // can change while this component stays mounted (navigating between
-  // episode numbers), so an unguarded effect risks a slower, stale fetch
-  // for the old episode landing after the new one's and clobbering it. The
-  // fetch error is also surfaced instead of silently leaving scores == [].
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      const { data, error: fetchError } = await supabase.from('scores').select('*').eq('episode_id', episode.id)
-      if (cancelled) return
-      if (fetchError) {
-        setError(fetchError.message)
-        return
-      }
-      setScores(data ?? [])
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [episode.id])
-
-  async function reload() {
-    const { data, error: fetchError } = await supabase.from('scores').select('*').eq('episode_id', episode.id)
-    if (fetchError) {
-      setError(fetchError.message)
-      return
-    }
-    setScores(data ?? [])
-  }
 
   async function handleOverride(playerId, newTotal) {
     setError(null)
@@ -2671,7 +2650,7 @@ function ManualOverrides({ episode, players }) {
       setError(upsertError.message)
       return
     }
-    await reload()
+    await onChanged()
   }
 
   if (episode.status !== 'scored') return null
@@ -2691,6 +2670,13 @@ function ManualOverrides({ episode, players }) {
                 <td>{p.display_name}</td>
                 <td>
                   <input
+                    // Keyed by the displayed total, not just p.id: this is an
+                    // uncontrolled input (defaultValue), which React only
+                    // applies on mount — without this, a fresh total flowing
+                    // in from a recompute wouldn't visually update an input
+                    // the admin isn't actively editing, and blurring it would
+                    // re-submit the stale number shown.
+                    key={`${p.id}-${s?.total ?? 0}`}
                     type="number"
                     defaultValue={s?.total ?? 0}
                     onBlur={(e) => handleOverride(p.id, e.target.value)}
@@ -2709,13 +2695,47 @@ function ManualOverrides({ episode, players }) {
 }
 ```
 
+(Fixed during Task 11 implementation and its two review rounds, 2026-09-21: removed a resync useEffect that depended on bonusQuestions by array reference (any sibling reload() on this page produced a new array and silently reset in-progress, unsaved answer-key edits) in favor of a key={episode.id} on this component at its render site — the correct fix, since the intent was reset-on-episode-navigation, not reset-on-any-page-change. Added error checks on all five post-write re-fetch queries. And moved players/scores fetching into loadEpisodeData (shared by the mount effect and reload()) so ManualOverrides always has current data — previously it fetched scores itself in a mount-only effect that never re-ran when AnswerKeyAndScore computed new scores, so the override table showed stale totals (0 on first score) and, because its input was an uncontrolled defaultValue, blurring a field could silently re-submit that stale number and permanently exclude a player from future recompute.)
+
 - [ ] **Step 3: Wire the new sections into AdminEpisode**
 
-In `AdminEpisode`, add a `players` state and fetch it in `reload`, then render the two new sections. Edit the top of the file's imports to add `supabase` fetch for players (reuse existing `supabase` import), then:
+By this point `AdminEpisode` already centralizes all of its data loading through the module-scope `loadEpisodeData(episodeNumber)` helper (shared by the mount/param-change effect and `reload()`) rather than fetching piecemeal inside the component — this shape was established in Task 9 and extended in Task 10. Extend `loadEpisodeData` to also fetch `players` and `scores`, add matching `players`/`scores` state to `AdminEpisode`, and set both from every place that already sets `episode`/`bonusQuestions`/`allBakers`/`activeBakers` (the mount effect's `.then()` and `reload()`):
 
-Add state: `const [players, setPlayers] = useState([])`
+```js
+async function loadEpisodeData(episodeNumber) {
+  const { data: ep, error: episodeError } = await supabase
+    .from('episodes')
+    .select('*')
+    .eq('number', episodeNumber)
+    .maybeSingle()
+  if (episodeError) throw episodeError
+  if (!ep) {
+    return { episode: null, bonusQuestions: [], allBakers: [], activeBakers: [], players: [], scores: [] }
+  }
+  const [bqs, all, active, { data: playerRows, error: playersError }, { data: scoreRows, error: scoresError }] =
+    await Promise.all([
+      fetchBonusQuestions(ep.id),
+      fetchAllBakers(),
+      fetchActiveBakers(),
+      supabase.from('players').select('*'),
+      supabase.from('scores').select('*').eq('episode_id', ep.id),
+    ])
+  if (playersError) throw playersError
+  if (scoresError) throw scoresError
+  return {
+    episode: ep,
+    bonusQuestions: bqs,
+    allBakers: all,
+    activeBakers: active,
+    players: playerRows ?? [],
+    scores: scoreRows ?? [],
+  }
+}
+```
 
-In `reload()`, add: `const { data: playerRows } = await supabase.from('players').select('*'); setPlayers(playerRows ?? [])`
+Add `const [players, setPlayers] = useState([])` and `const [scores, setScores] = useState([])` to `AdminEpisode`, and add `setPlayers(result.players)` / `setScores(result.scores)` alongside the existing `setEpisode`/`setBonusQuestions`/`setAllBakers`/`setActiveBakers` calls in both the mount effect's `.then()` and `reload()`.
+
+(This is a deliberate departure from fetching `players` only inside `reload()`, which an earlier draft of this task did: `ManualOverrides` needs current `scores` every time `AnswerKeyAndScore` computes new ones, and fetching only in `reload()` — not the initial mount load — left `ManualOverrides` with stale/empty data on a fresh page load of an already-`scored` episode. Centralizing both fetches in `loadEpisodeData` keeps a single source of truth that both the mount effect and every `reload()` call share.)
 
 At the end of the `AdminEpisode` return block, replace:
 
@@ -2731,13 +2751,21 @@ with:
 ```jsx
       {episode.status !== 'draft' && <IntroNoteAndLock episode={episode} onChanged={reload} />}
       {episode.status !== 'draft' && (
-        <AnswerKeyAndScore episode={episode} bonusQuestions={bonusQuestions} allBakers={allBakers} onChanged={reload} />
+        <AnswerKeyAndScore
+          key={episode.id}
+          episode={episode}
+          bonusQuestions={bonusQuestions}
+          allBakers={allBakers}
+          onChanged={reload}
+        />
       )}
-      <ManualOverrides episode={episode} players={players} />
+      <ManualOverrides episode={episode} players={players} scores={scores} onChanged={reload} />
     </div>
   )
 }
 ```
+
+(`key={episode.id}` on `AnswerKeyAndScore`: this component's own local form state must survive a `reload()` triggered by a sibling action on the same page (adding a bonus question, locking the email) without resetting whatever the admin is mid-typing — it should only reset when the admin actually navigates to a different episode. Keying by the episode's stable id, rather than a resync effect watching `bonusQuestions` by reference, achieves exactly that: same key across a same-episode `reload()` (state preserved), new key on navigation to a different episode (fresh mount, fresh state).)
 
 - [ ] **Step 4: Manually verify end-to-end**
 
