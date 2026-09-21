@@ -102,6 +102,10 @@ async function loadEpisodeData(episodeNumber) {
 function IntroNoteAndLock({ episode, onChanged }) {
   const [introNote, setIntroNote] = useState(episode.intro_note ?? '')
   const [error, setError] = useState(null)
+  // One flag shared by all three actions, not a separate one per button:
+  // they all write to the same episode row (intro_note and/or
+  // email_locked_at), so letting one fire while another is still in flight
+  // risks a last-write-wins race that silently reverts a just-saved note.
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -129,10 +133,12 @@ function IntroNoteAndLock({ episode, onChanged }) {
       setError('Write an intro note before locking.')
       return
     }
+    setSaving(true)
     const { error: updateError } = await supabase
       .from('episodes')
       .update({ intro_note: introNote, email_locked_at: new Date().toISOString() })
       .eq('id', episode.id)
+    setSaving(false)
     if (updateError) {
       setError(updateError.message)
       return
@@ -142,10 +148,12 @@ function IntroNoteAndLock({ episode, onChanged }) {
 
   async function handleUnlock() {
     setError(null)
+    setSaving(true)
     const { error: updateError } = await supabase
       .from('episodes')
       .update({ email_locked_at: null })
       .eq('id', episode.id)
+    setSaving(false)
     if (updateError) {
       setError(updateError.message)
       return
@@ -164,7 +172,7 @@ function IntroNoteAndLock({ episode, onChanged }) {
       {episode.email_locked_at ? (
         <>
           <span> Locked and ready to send.</span>{' '}
-          <button onClick={handleUnlock}>Unlock</button>
+          <button onClick={handleUnlock} disabled={saving}>Unlock</button>
           {' '}
           <a
             href={`https://github.com/${import.meta.env.VITE_GITHUB_REPO}/actions/workflows/thursday-send.yml`}
@@ -175,7 +183,7 @@ function IntroNoteAndLock({ episode, onChanged }) {
           </a>
         </>
       ) : (
-        <button onClick={handleLock}>Lock &amp; ready to send</button>
+        <button onClick={handleLock} disabled={saving}>Lock &amp; ready to send</button>
       )}
       {episode.email_sent_at && <p>Email sent at {new Date(episode.email_sent_at).toLocaleString()}.</p>}
       {error && <p className="error">{error}</p>}
