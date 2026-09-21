@@ -321,7 +321,7 @@ create table admins (
 );
 
 -- Seed the initial admin.
-insert into admins (email) values ('aaron@westernpriorities.org');
+insert into admins (email) values ('aaronwe@gmail.com');
 
 -- ── Helper functions ─────────────────────────────────────────
 
