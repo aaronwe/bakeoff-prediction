@@ -12,7 +12,19 @@ export default function EpisodeReveal() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    fetchEpisodeRevealData(Number(number)).then(setData).catch((e) => setError(e.message))
+    let cancelled = false
+    setData(null)
+    setError(null)
+    fetchEpisodeRevealData(Number(number))
+      .then((result) => {
+        if (!cancelled) setData(result)
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [number])
 
   if (error) return <p className="error">{error}</p>

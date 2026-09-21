@@ -1672,7 +1672,19 @@ export default function EpisodeReveal() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    fetchEpisodeRevealData(Number(number)).then(setData).catch((e) => setError(e.message))
+    let cancelled = false
+    setData(null)
+    setError(null)
+    fetchEpisodeRevealData(Number(number))
+      .then((result) => {
+        if (!cancelled) setData(result)
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [number])
 
   if (error) return <p className="error">{error}</p>
@@ -1733,6 +1745,8 @@ export default function EpisodeReveal() {
   )
 }
 ```
+
+(Fixed during Task 7 code quality review, 2026-09-21: the effect originally had no `cancelled`-flag guard and never reset `error`/`data` before a new fetch — same pattern already used in `Leaderboard.jsx`/`WeeklyForm.jsx` after Task 5's review, missed here. Without the reset, a failed fetch for one episode number left the page stuck on the error view even after navigating to a different, valid episode number succeeded, since React Router doesn't remount this component on a param-only change. Without the `cancelled` guard, a superseded slow request could overwrite a newer one's data. Both fixed to match the sibling pages' pattern.)
 
 - [ ] **Step 3: Add the route**
 
