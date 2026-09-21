@@ -91,13 +91,15 @@ async function loadEpisodeData(episodeNumber) {
     .eq('number', episodeNumber)
     .maybeSingle()
   if (episodeError) throw episodeError
-  if (!ep) return { episode: null, bonusQuestions: [], allBakers: [], activeBakers: [] }
-  const [bqs, all, active] = await Promise.all([
+  if (!ep) return { episode: null, bonusQuestions: [], allBakers: [], activeBakers: [], players: [] }
+  const [bqs, all, active, { data: playerRows, error: playersError }] = await Promise.all([
     fetchBonusQuestions(ep.id),
     fetchAllBakers(),
     fetchActiveBakers(),
+    supabase.from('players').select('*'),
   ])
-  return { episode: ep, bonusQuestions: bqs, allBakers: all, activeBakers: active }
+  if (playersError) throw playersError
+  return { episode: ep, bonusQuestions: bqs, allBakers: all, activeBakers: active, players: playerRows ?? [] }
 }
 
 function IntroNoteAndLock({ episode, onChanged }) {
@@ -204,18 +206,6 @@ function AnswerKeyAndScore({ episode, bonusQuestions, allBakers, onChanged }) {
   const [summary, setSummary] = useState(null)
   const [scoring, setScoring] = useState(false)
 
-  // AdminEpisode renders this component unkeyed, so navigating between
-  // episode numbers (a param change, not a remount — same as
-  // IntroNoteAndLock above) would otherwise leave these fields showing the
-  // previous episode's answer key/bonus answers instead of the new one's.
-  useEffect(() => {
-    setTechnicalWinner(episode.technical_winner_baker_id ?? '')
-    setStarBaker(episode.star_baker_id ?? '')
-    setEliminated(episode.eliminated_baker_id ?? '')
-    setHandshakeCount(episode.handshake_count ?? '')
-    setBonusCorrect(Object.fromEntries(bonusQuestions.map((bq) => [bq.id, bq.correct_answer ?? ''])))
-  }, [episode.id, episode.technical_winner_baker_id, episode.star_baker_id, episode.eliminated_baker_id, episode.handshake_count, bonusQuestions])
-
   async function handleSubmit(e) {
     e.preventDefault()
     setScoring(true)
@@ -258,19 +248,42 @@ function AnswerKeyAndScore({ episode, bonusQuestions, allBakers, onChanged }) {
     }
 
     // Re-fetch rather than reuse local state, so scoring always computes
-    // against exactly what's now in the database.
-    const { data: scoredEpisode } = await supabase.from('episodes').select('*').eq('id', episode.id).single()
-    const { data: scoredBonusQuestions } = await supabase
+    // against exactly what's now in the database. The writes above already
+    // succeeded at this point, so a failure here is a genuine (if unlikely)
+    // fetch error, not a validation case — surface it instead of letting a
+    // missing `data` crash the code below with a TypeError.
+    const { data: scoredEpisode, error: scoredEpisodeError } = await supabase
+      .from('episodes')
+      .select('*')
+      .eq('id', episode.id)
+      .single()
+    const { data: scoredBonusQuestions, error: scoredBonusQuestionsError } = await supabase
       .from('bonus_questions')
       .select('*')
       .eq('episode_id', episode.id)
+    if (scoredEpisodeError || scoredBonusQuestionsError) {
+      setError((scoredEpisodeError ?? scoredBonusQuestionsError).message)
+      setScoring(false)
+      return
+    }
 
-    const { data: answers } = await supabase.from('answers').select('*').eq('episode_id', episode.id)
+    const { data: answers, error: answersError } = await supabase
+      .from('answers')
+      .select('*')
+      .eq('episode_id', episode.id)
     const bonusQuestionIds = (scoredBonusQuestions ?? []).map((bq) => bq.id)
-    const { data: bonusAnswers } = bonusQuestionIds.length
+    const { data: bonusAnswers, error: bonusAnswersError } = bonusQuestionIds.length
       ? await supabase.from('bonus_answers').select('*').in('bonus_question_id', bonusQuestionIds)
-      : { data: [] }
-    const { data: existingScores } = await supabase.from('scores').select('*').eq('episode_id', episode.id)
+      : { data: [], error: null }
+    const { data: existingScores, error: existingScoresError } = await supabase
+      .from('scores')
+      .select('*')
+      .eq('episode_id', episode.id)
+    if (answersError || bonusAnswersError || existingScoresError) {
+      setError((answersError ?? bonusAnswersError ?? existingScoresError).message)
+      setScoring(false)
+      return
+    }
 
     let recomputed = 0
     let preserved = 0
@@ -468,6 +481,7 @@ export default function AdminEpisode() {
         setBonusQuestions(result.bonusQuestions)
         setAllBakers(result.allBakers)
         setActiveBakers(result.activeBakers)
+        setPlayers(result.players)
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err.message)
@@ -487,8 +501,7 @@ export default function AdminEpisode() {
       setBonusQuestions(result.bonusQuestions)
       setAllBakers(result.allBakers)
       setActiveBakers(result.activeBakers)
-      const { data: playerRows } = await supabase.from('players').select('*')
-      setPlayers(playerRows ?? [])
+      setPlayers(result.players)
     } catch (err) {
       setError(err.message)
     }
@@ -547,7 +560,18 @@ export default function AdminEpisode() {
 
       {episode.status !== 'draft' && <IntroNoteAndLock episode={episode} onChanged={reload} />}
       {episode.status !== 'draft' && (
-        <AnswerKeyAndScore episode={episode} bonusQuestions={bonusQuestions} allBakers={allBakers} onChanged={reload} />
+        // key={episode.id}, not a resync effect: this component's local form
+        // state must survive a reload() triggered by a sibling action on this
+        // same page (adding a bonus question, locking the email, etc.) without
+        // clobbering whatever the admin is mid-typing — it should only reset
+        // when the admin actually navigates to a different episode.
+        <AnswerKeyAndScore
+          key={episode.id}
+          episode={episode}
+          bonusQuestions={bonusQuestions}
+          allBakers={allBakers}
+          onChanged={reload}
+        />
       )}
       <ManualOverrides episode={episode} players={players} />
     </div>
