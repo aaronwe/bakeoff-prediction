@@ -80,12 +80,17 @@ function NewBonusQuestionForm({ episodeId, onAdded }) {
 // Defined at module scope (taking episodeNumber explicitly, rather than
 // closing over component state) so its identity is stable across renders.
 async function loadEpisodeData(episodeNumber) {
+  // maybeSingle, not single: a nonexistent episode number should surface as
+  // `episode: null` (a normal, recoverable "not found" render) rather than
+  // a thrown fetch error that leaves the page stuck on the error/retry view
+  // forever, since retrying can never make a bad episode number exist.
   const { data: ep, error: episodeError } = await supabase
     .from('episodes')
     .select('*')
     .eq('number', episodeNumber)
-    .single()
+    .maybeSingle()
   if (episodeError) throw episodeError
+  if (!ep) return { episode: null, bonusQuestions: [], allBakers: [], activeBakers: [] }
   const [bqs, all, active] = await Promise.all([
     fetchBonusQuestions(ep.id),
     fetchAllBakers(),
@@ -104,6 +109,7 @@ export default function AdminEpisode() {
   const [loadError, setLoadError] = useState(null)
   const [retryCount, setRetryCount] = useState(0)
   const [error, setError] = useState(null)
+  const [publishing, setPublishing] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -142,10 +148,16 @@ export default function AdminEpisode() {
 
   async function handlePublish() {
     setError(null)
+    setPublishing(true)
+    // .eq('status', 'draft') guards against a double-click racing two
+    // publishes; the disabled button below is the first line of defense,
+    // this is the one that actually matters.
     const { error: updateError } = await supabase
       .from('episodes')
       .update({ status: 'open' })
       .eq('id', episode.id)
+      .eq('status', 'draft')
+    setPublishing(false)
     if (updateError) {
       setError(updateError.message)
       return
@@ -172,7 +184,7 @@ export default function AdminEpisode() {
       {error && <p className="error">{error}</p>}
 
       {episode.status === 'draft' && (
-        <button onClick={handlePublish}>Publish (open for predictions)</button>
+        <button onClick={handlePublish} disabled={publishing}>Publish (open for predictions)</button>
       )}
 
       <h3>Bonus questions</h3>
