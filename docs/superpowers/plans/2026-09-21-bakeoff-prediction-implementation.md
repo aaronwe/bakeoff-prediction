@@ -222,6 +222,25 @@ alter table bakers
   add constraint bakers_eliminated_episode_id_fkey
   foreign key (eliminated_episode_id) references episodes(id);
 
+-- These four columns are the answer key. RLS lets any authenticated player
+-- read an `open` episode's row (they need number/air_date/intro_note/status
+-- to use the app), and row-level security can't selectively hide just these
+-- columns from that same row. Without this constraint, an admin filling in
+-- the answer key before clicking "Score" (two separate steps in the admin
+-- UI) would leak the correct answers to any player who inspects the API
+-- response, who could then edit their own still-open answer to match. This
+-- constraint makes that leak impossible at the database level: these columns
+-- can only be non-null once status is already 'scored', so the admin UI's
+-- answer-key entry and scoring must happen as one atomic write (see Task 11).
+alter table episodes add constraint episodes_answer_key_only_when_scored check (
+  status = 'scored' or (
+    technical_winner_baker_id is null
+    and star_baker_id is null
+    and eliminated_baker_id is null
+    and handshake_count is null
+  )
+);
+
 create table players (
   id uuid primary key default gen_random_uuid(),
   email text not null unique,
@@ -240,6 +259,27 @@ create table bonus_questions (
   correct_answer text,
   created_at timestamptz not null default now()
 );
+
+-- Same leak this closes on episodes' answer-key columns (see the comment on
+-- episodes_answer_key_only_when_scored above), but correct_answer's "is the
+-- episode scored yet" check crosses tables, so a CHECK constraint can't
+-- express it directly — a trigger is the equivalent enforcement mechanism.
+create or replace function enforce_bonus_correct_answer_only_when_scored() returns trigger
+language plpgsql
+as $$
+begin
+  if new.correct_answer is not null then
+    if not exists (select 1 from episodes e where e.id = new.episode_id and e.status = 'scored') then
+      raise exception 'correct_answer can only be set once the episode is scored';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger bonus_questions_correct_answer_guard
+  before insert or update on bonus_questions
+  for each row execute function enforce_bonus_correct_answer_only_when_scored();
 
 create table answers (
   id uuid primary key default gen_random_uuid(),
@@ -389,7 +429,7 @@ create policy scores_write on scores for all using (is_admin()) with check (is_a
 create policy admins_select on admins for select using (email = auth.jwt() ->> 'email');
 ```
 
-(Two bugs found and fixed during Task 2 implementation review, 2026-09-21: (1) `admins_select` originally used `is_admin()`, which itself queries `admins` — since `admins` has RLS enabled, that query re-triggers `admins_select`, causing infinite recursion that would break every admin-gated policy in the schema. Fixed by making `admins_select` a direct self-row check instead. (2) `answers_update`/`bonus_answers_update`'s `with check` clauses didn't re-verify the episode was still `open` for the *new* row values, only the `using` clause checked the existing row — a gap versus "players can edit answers only while open." Fixed by adding the same episode-status check to both `with check` clauses.)
+(Three bugs found and fixed during Task 2 implementation review, 2026-09-21: (1) `admins_select` originally used `is_admin()`, which itself queries `admins` — since `admins` has RLS enabled, that query re-triggers `admins_select`, causing infinite recursion that would break every admin-gated policy in the schema. Fixed by making `admins_select` a direct self-row check instead. (2) `answers_update`/`bonus_answers_update`'s `with check` clauses didn't re-verify the episode was still `open` for the *new* row values, only the `using` clause checked the existing row — a gap versus "players can edit answers only while open." Fixed by adding the same episode-status check to both `with check` clauses. (3) **Critical:** RLS is row-level, not column-level — once an episode is `open` (not `draft`), `episodes_select` exposes the *entire* row to every player, including the answer-key columns (`technical_winner_baker_id`, `star_baker_id`, `eliminated_baker_id`, `handshake_count`), and the same was true of `bonus_questions.correct_answer`. Since the admin workflow originally had "enter the answer key" and "score" as two separate persisted steps, any answer key entered before the admin clicked "Score" would be readable by any player via the browser's already-loaded Supabase client — who could then edit their own still-`open` answer to match before scoring ran, i.e. a real path to a guaranteed-perfect score, not just a spoiler. Fixed with the `episodes_answer_key_only_when_scored` CHECK constraint and the `bonus_questions_correct_answer_guard` trigger above, which make it impossible for these columns to hold a value unless the episode is already `scored` — enforced by Postgres itself, not just app code. This requires the admin UI to write the answer key and flip status to `scored` as a single atomic action rather than two separate saves; **Task 11 below reflects this** (a combined "Enter answer key & score" step, not a separate persisted "save answer key" step).)
 
 - [ ] **Step 2: Run it against your Supabase project**
 
@@ -2118,12 +2158,20 @@ git commit -m "Add weekly email intro note and lock/unlock"
 **Files:**
 - Modify: `web/src/pages/admin/AdminEpisode.jsx`
 
-- [ ] **Step 1: Add the answer key form**
+**Why this is one combined step, not two:** `supabase/schema.sql`'s `episodes_answer_key_only_when_scored` constraint and `bonus_questions_correct_answer_guard` trigger (added during Task 2) make it impossible to save answer-key values while the episode is still `open` — they can only be written in the same operation that sets `status = 'scored'`. This closes a real leak (RLS is row-level, so a separately-saved answer key would be readable by every player before scoring ran, letting them edit their own still-open answer to match). So there's no separate "save answer key" step — filling in the key and scoring happen together in one form/one submit.
 
-Add this component above `AdminEpisode` in `web/src/pages/admin/AdminEpisode.jsx`:
+- [ ] **Step 1: Add the combined answer key + scoring component**
+
+Add `computeScoreForPlayer` to the imports at the very top of `web/src/pages/admin/AdminEpisode.jsx` (alongside the existing imports from Task 9):
 
 ```jsx
-function AnswerKeyForm({ episode, bonusQuestions, allBakers, onChanged }) {
+import { computeScoreForPlayer } from '../../lib/scoring'
+```
+
+Then add this component above `AdminEpisode`:
+
+```jsx
+function AnswerKeyAndScore({ episode, bonusQuestions, allBakers, onChanged }) {
   const [technicalWinner, setTechnicalWinner] = useState(episode.technical_winner_baker_id ?? '')
   const [starBaker, setStarBaker] = useState(episode.star_baker_id ?? '')
   const [eliminated, setEliminated] = useState(episode.eliminated_baker_id ?? '')
@@ -2132,13 +2180,18 @@ function AnswerKeyForm({ episode, bonusQuestions, allBakers, onChanged }) {
     Object.fromEntries(bonusQuestions.map((bq) => [bq.id, bq.correct_answer ?? ''])),
   )
   const [error, setError] = useState(null)
-  const [saving, setSaving] = useState(false)
+  const [summary, setSummary] = useState(null)
+  const [scoring, setScoring] = useState(false)
 
-  async function handleSave(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    setSaving(true)
+    setScoring(true)
     setError(null)
+    setSummary(null)
 
+    // Must set the answer key and status: 'scored' in this one update — the
+    // episodes_answer_key_only_when_scored constraint rejects a non-null
+    // answer key on any row that isn't already 'scored'.
     const { error: episodeError } = await supabase
       .from('episodes')
       .update({
@@ -2146,15 +2199,19 @@ function AnswerKeyForm({ episode, bonusQuestions, allBakers, onChanged }) {
         star_baker_id: starBaker || null,
         eliminated_baker_id: eliminated || null,
         handshake_count: handshakeCount === '' ? null : Number(handshakeCount),
+        status: 'scored',
       })
       .eq('id', episode.id)
 
     if (episodeError) {
       setError(episodeError.message)
-      setSaving(false)
+      setScoring(false)
       return
     }
 
+    // Must run after the episodes update above — the
+    // bonus_questions_correct_answer_guard trigger checks that this
+    // bonus question's episode is already 'scored'.
     for (const bq of bonusQuestions) {
       const { error: bqError } = await supabase
         .from('bonus_questions')
@@ -2162,18 +2219,67 @@ function AnswerKeyForm({ episode, bonusQuestions, allBakers, onChanged }) {
         .eq('id', bq.id)
       if (bqError) {
         setError(bqError.message)
-        setSaving(false)
+        setScoring(false)
         return
       }
     }
 
-    setSaving(false)
+    // Re-fetch rather than reuse local state, so scoring always computes
+    // against exactly what's now in the database.
+    const { data: scoredEpisode } = await supabase.from('episodes').select('*').eq('id', episode.id).single()
+    const { data: scoredBonusQuestions } = await supabase
+      .from('bonus_questions')
+      .select('*')
+      .eq('episode_id', episode.id)
+
+    const { data: answers } = await supabase.from('answers').select('*').eq('episode_id', episode.id)
+    const bonusQuestionIds = (scoredBonusQuestions ?? []).map((bq) => bq.id)
+    const { data: bonusAnswers } = bonusQuestionIds.length
+      ? await supabase.from('bonus_answers').select('*').in('bonus_question_id', bonusQuestionIds)
+      : { data: [] }
+    const { data: existingScores } = await supabase.from('scores').select('*').eq('episode_id', episode.id)
+
+    let recomputed = 0
+    let preserved = 0
+
+    for (const answer of answers) {
+      const existing = existingScores.find((s) => s.player_id === answer.player_id)
+      if (existing?.manually_overridden) {
+        preserved += 1
+        continue
+      }
+      const { breakdown, total } = computeScoreForPlayer({
+        episode: scoredEpisode,
+        answer,
+        bonusQuestions: scoredBonusQuestions ?? [],
+        bonusAnswers: bonusAnswers.filter((ba) => ba.player_id === answer.player_id),
+      })
+      const { error: upsertError } = await supabase.from('scores').upsert(
+        {
+          episode_id: episode.id,
+          player_id: answer.player_id,
+          points_breakdown: breakdown,
+          total,
+          manually_overridden: false,
+        },
+        { onConflict: 'episode_id,player_id' },
+      )
+      if (upsertError) {
+        setError(upsertError.message)
+        setScoring(false)
+        return
+      }
+      recomputed += 1
+    }
+
+    setSummary(`${recomputed} player score(s) recomputed, ${preserved} manual override(s) preserved.`)
+    setScoring(false)
     onChanged()
   }
 
   return (
-    <form onSubmit={handleSave}>
-      <h3>Answer key</h3>
+    <form onSubmit={handleSubmit}>
+      <h3>Answer key &amp; scoring</h3>
       <label>
         Technical challenge winner
         <select value={technicalWinner} onChange={(e) => setTechnicalWinner(e.target.value)}>
@@ -2208,103 +2314,21 @@ function AnswerKeyForm({ episode, bonusQuestions, allBakers, onChanged }) {
           />
         </label>
       ))}
-      <button type="submit" disabled={saving}>Save answer key</button>
+      <p>
+        Nothing here is saved until you submit — the database won't accept a partial answer key while the
+        episode is still open, so entering the key and scoring happen together in one step.
+      </p>
+      <button type="submit" disabled={scoring}>
+        {scoring ? 'Scoring…' : episode.status === 'scored' ? 'Re-score' : 'Enter answer key & score'}
+      </button>
+      {summary && <p>{summary}</p>}
       {error && <p className="error">{error}</p>}
     </form>
   )
 }
 ```
 
-- [ ] **Step 2: Add the scoring action**
-
-First, add `computeScoreForPlayer` to the imports at the very top of `web/src/pages/admin/AdminEpisode.jsx` (alongside the existing imports from Task 9):
-
-```jsx
-import { computeScoreForPlayer } from '../../lib/scoring'
-```
-
-Then add this component above `AdminEpisode`, using that import:
-
-```jsx
-function ScoreEpisode({ episode, bonusQuestions, onChanged }) {
-  const [error, setError] = useState(null)
-  const [summary, setSummary] = useState(null)
-  const [scoring, setScoring] = useState(false)
-
-  async function handleScore() {
-    setScoring(true)
-    setError(null)
-    setSummary(null)
-
-    const { data: answers } = await supabase.from('answers').select('*').eq('episode_id', episode.id)
-    const bonusQuestionIds = bonusQuestions.map((bq) => bq.id)
-    const { data: bonusAnswers } = bonusQuestionIds.length
-      ? await supabase.from('bonus_answers').select('*').in('bonus_question_id', bonusQuestionIds)
-      : { data: [] }
-    const { data: existingScores } = await supabase.from('scores').select('*').eq('episode_id', episode.id)
-
-    let recomputed = 0
-    let preserved = 0
-
-    for (const answer of answers) {
-      const existing = existingScores.find((s) => s.player_id === answer.player_id)
-      if (existing?.manually_overridden) {
-        preserved += 1
-        continue
-      }
-      const { breakdown, total } = computeScoreForPlayer({
-        episode,
-        answer,
-        bonusQuestions,
-        bonusAnswers: bonusAnswers.filter((ba) => ba.player_id === answer.player_id),
-      })
-      const { error: upsertError } = await supabase.from('scores').upsert(
-        {
-          episode_id: episode.id,
-          player_id: answer.player_id,
-          points_breakdown: breakdown,
-          total,
-          manually_overridden: false,
-        },
-        { onConflict: 'episode_id,player_id' },
-      )
-      if (upsertError) {
-        setError(upsertError.message)
-        setScoring(false)
-        return
-      }
-      recomputed += 1
-    }
-
-    const { error: statusError } = await supabase
-      .from('episodes')
-      .update({ status: 'scored' })
-      .eq('id', episode.id)
-    if (statusError) {
-      setError(statusError.message)
-      setScoring(false)
-      return
-    }
-
-    setSummary(`${recomputed} player score(s) recomputed, ${preserved} manual override(s) preserved.`)
-    setScoring(false)
-    onChanged()
-  }
-
-  return (
-    <div>
-      <h3>Scoring</h3>
-      <button onClick={handleScore} disabled={scoring}>
-        {scoring ? 'Scoring…' : episode.status === 'scored' ? 'Re-score' : 'Score episode'}
-      </button>
-      {summary && <p>{summary}</p>}
-      {error && <p className="error">{error}</p>}
-    </div>
-  )
-}
-```
-
-- [ ] **Step 3: Add manual override UI**
+- [ ] **Step 2: Add manual override UI**
 
 Add this component above `AdminEpisode`:
 
@@ -2377,9 +2401,9 @@ function ManualOverrides({ episode, players }) {
 }
 ```
 
-- [ ] **Step 4: Wire the new sections into AdminEpisode**
+- [ ] **Step 3: Wire the new sections into AdminEpisode**
 
-In `AdminEpisode`, add a `players` state and fetch it in `reload`, then render the three new sections. Edit the top of the file's imports to add `supabase` fetch for players (reuse existing `supabase` import), then:
+In `AdminEpisode`, add a `players` state and fetch it in `reload`, then render the two new sections. Edit the top of the file's imports to add `supabase` fetch for players (reuse existing `supabase` import), then:
 
 Add state: `const [players, setPlayers] = useState([])`
 
@@ -2399,10 +2423,7 @@ with:
 ```jsx
       {episode.status !== 'draft' && <IntroNoteAndLock episode={episode} onChanged={reload} />}
       {episode.status !== 'draft' && (
-        <AnswerKeyForm episode={episode} bonusQuestions={bonusQuestions} allBakers={allBakers} onChanged={reload} />
-      )}
-      {episode.status !== 'draft' && (
-        <ScoreEpisode episode={episode} bonusQuestions={bonusQuestions} onChanged={reload} />
+        <AnswerKeyAndScore episode={episode} bonusQuestions={bonusQuestions} allBakers={allBakers} onChanged={reload} />
       )}
       <ManualOverrides episode={episode} players={players} />
     </div>
@@ -2410,21 +2431,23 @@ with:
 }
 ```
 
-- [ ] **Step 5: Manually verify end-to-end**
+- [ ] **Step 4: Manually verify end-to-end**
 
 ```bash
 cd web
 npm run dev
 ```
 
-As a player: submit answers for the open episode. As admin: fill in the answer key, click "Score episode," confirm a success summary appears. Visit `/leaderboard` and `/episodes/1` (or your episode number) and confirm the score and reveal show correctly. Try a manual override on one player's total and confirm re-scoring preserves it (summary says "1 manual override(s) preserved").
+As a player: submit answers for the open episode. As admin: fill in the answer key form and click "Enter answer key & score," confirm a success summary appears. Visit `/leaderboard` and `/episodes/1` (or your episode number) and confirm the score and reveal show correctly. Try a manual override on one player's total and confirm re-scoring preserves it (summary says "1 manual override(s) preserved").
 
-- [ ] **Step 6: Commit**
+Also confirm the fix this task's design depends on actually holds: while the episode is still `open` (before submitting the answer key), open a second browser session signed in as a non-admin player and confirm `episodes.technical_winner_baker_id` etc. still read `null` via the app (e.g. the episode reveal page still says "hasn't been scored yet") — the database should be physically incapable of holding a value there until you submit.
+
+- [ ] **Step 5: Commit**
 
 ```bash
 cd /Users/aaronweiss/claude/Projects/bakeoff-prediction
 git add web/src/pages/admin/AdminEpisode.jsx
-git commit -m "Add answer key entry, scoring, and manual override"
+git commit -m "Add combined answer key entry + scoring, and manual override"
 ```
 
 ---

@@ -33,6 +33,25 @@ alter table bakers
   add constraint bakers_eliminated_episode_id_fkey
   foreign key (eliminated_episode_id) references episodes(id);
 
+-- These four columns are the answer key. RLS lets any authenticated player
+-- read an `open` episode's row (they need number/air_date/intro_note/status
+-- to use the app), and row-level security can't selectively hide just these
+-- columns from that same row. Without this constraint, an admin filling in
+-- the answer key before clicking "Score" (two separate steps in the admin
+-- UI) would leak the correct answers to any player who inspects the API
+-- response, who could then edit their own still-open answer to match. This
+-- constraint makes that leak impossible at the database level: these columns
+-- can only be non-null once status is already 'scored', so the admin UI's
+-- answer-key entry and scoring must happen as one atomic write (see Task 11).
+alter table episodes add constraint episodes_answer_key_only_when_scored check (
+  status = 'scored' or (
+    technical_winner_baker_id is null
+    and star_baker_id is null
+    and eliminated_baker_id is null
+    and handshake_count is null
+  )
+);
+
 create table players (
   id uuid primary key default gen_random_uuid(),
   email text not null unique,
@@ -51,6 +70,27 @@ create table bonus_questions (
   correct_answer text,
   created_at timestamptz not null default now()
 );
+
+-- Same leak this closes on episodes' answer-key columns (see the comment on
+-- episodes_answer_key_only_when_scored above), but correct_answer's "is the
+-- episode scored yet" check crosses tables, so a CHECK constraint can't
+-- express it directly — a trigger is the equivalent enforcement mechanism.
+create or replace function enforce_bonus_correct_answer_only_when_scored() returns trigger
+language plpgsql
+as $$
+begin
+  if new.correct_answer is not null then
+    if not exists (select 1 from episodes e where e.id = new.episode_id and e.status = 'scored') then
+      raise exception 'correct_answer can only be set once the episode is scored';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger bonus_questions_correct_answer_guard
+  before insert or update on bonus_questions
+  for each row execute function enforce_bonus_correct_answer_only_when_scored();
 
 create table answers (
   id uuid primary key default gen_random_uuid(),
