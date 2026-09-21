@@ -2971,12 +2971,29 @@ describe('decideWeeklyAction', () => {
     expect(decideWeeklyAction({ status: 'scored', email_locked_at: '2026-01-01T00:00:00Z' })).toEqual({ action: 'none' })
   })
 
-  it('sends when the open episode is locked', () => {
-    expect(decideWeeklyAction({ status: 'open', email_locked_at: '2026-01-01T00:00:00Z' })).toEqual({ action: 'send' })
+  it('sends when the open episode is locked and not yet sent', () => {
+    expect(
+      decideWeeklyAction({ status: 'open', email_locked_at: '2026-01-01T00:00:00Z', email_sent_at: null }),
+    ).toEqual({ action: 'send' })
   })
 
   it('reminds the admin when the open episode is not locked', () => {
-    expect(decideWeeklyAction({ status: 'open', email_locked_at: null })).toEqual({ action: 'remind' })
+    expect(decideWeeklyAction({ status: 'open', email_locked_at: null, email_sent_at: null })).toEqual({
+      action: 'remind',
+    })
+  })
+
+  // Locks in the duplicate-send guard: an admin using the "Send now" GitHub
+  // Actions link (Task 10) mid-week must not also get emailed again by the
+  // Thursday cron for the same still-open, still-locked episode.
+  it('does nothing when the locked episode has already been sent', () => {
+    expect(
+      decideWeeklyAction({
+        status: 'open',
+        email_locked_at: '2026-01-01T00:00:00Z',
+        email_sent_at: '2026-01-01T00:05:00Z',
+      }),
+    ).toEqual({ action: 'none' })
   })
 })
 ```
@@ -2998,10 +3015,17 @@ Create `scripts/lib/weeklyEmailDecision.mjs`:
 export function decideWeeklyAction(episode) {
   if (!episode) return { action: 'none' }
   if (episode.status !== 'open') return { action: 'none' }
+  // Already sent this cycle: without this check, an admin who used "Send
+  // now" (Task 10) mid-week would get a duplicate send to every real player
+  // when the Thursday cron fires later for the same still-open, still-locked
+  // episode.
+  if (episode.email_sent_at) return { action: 'none' }
   if (episode.email_locked_at) return { action: 'send' }
   return { action: 'remind' }
 }
 ```
+
+(Fixed during the Task 15-16 review, 2026-09-21 — this task's own logic had a gap the review process for Tasks 1-14 would normally have caught at the time: no guard against an already-sent episode, so the cron could re-email every player after a manual "Send now." Added the `email_sent_at` check and a locking test above.)
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -3397,6 +3421,13 @@ on:
 permissions:
   contents: write
 
+# A manual "Send now" run overlapping the scheduled run would otherwise let
+# both fire the email step before either reaches the push, sending real
+# players a duplicate.
+concurrency:
+  group: thursday-send
+  cancel-in-progress: false
+
 jobs:
   send-and-backup:
     runs-on: ubuntu-latest
@@ -3405,7 +3436,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # @supabase/supabase-js declares engines.node >= 22.0.0; Node 20
+          # can install it (npm only warns) but isn't a version the package
+          # actually supports running under.
+          node-version: 22
 
       - name: Install script dependencies
         working-directory: scripts
@@ -3436,8 +3470,11 @@ jobs:
           git config user.email "actions@github.com"
           git add backups/
           git diff --cached --quiet || git commit -m "Weekly score backup $(date -u +%Y-%m-%d)"
+          git pull --rebase
           git push
 ```
+
+(Fixed during the Task 15-16 review, 2026-09-21: bumped Node 20 -> 22 in all three workflows since @supabase/supabase-js declares engines.node >=22.0.0; added a concurrency guard so an overlapping manual dispatch cannot send a duplicate email before either run reaches its push step; added git pull --rebase before the push for robustness against a concurrent manual push to main.)
 
 - [ ] **Step 2: Write the Wednesday workflow (scoring reminder)**
 
@@ -3451,6 +3488,13 @@ on:
     - cron: '0 13 * * 3'
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
+concurrency:
+  group: wednesday-reminder
+  cancel-in-progress: false
+
 jobs:
   remind:
     runs-on: ubuntu-latest
@@ -3459,7 +3503,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # @supabase/supabase-js declares engines.node >= 22.0.0.
+          node-version: 22
 
       - name: Install script dependencies
         working-directory: scripts
@@ -3474,6 +3519,8 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: node send-scoring-reminder.mjs
 ```
+
+(Fixed during the Task 15-16 review, 2026-09-21: bumped Node 20 -> 22, added an explicit permissions: contents: read block for consistency with the other two workflows, and added a concurrency guard.)
 
 - [ ] **Step 3: Push the repo and add GitHub Actions secrets**
 
@@ -3535,7 +3582,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Matches the scripts/ workflows: @supabase/supabase-js (also a
+          # web/ dependency) declares engines.node >= 22.0.0.
+          node-version: 22
 
       - name: Install dependencies
         working-directory: web
@@ -3563,6 +3612,8 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v4
 ```
+
+(Fixed during the Task 15-16 review, 2026-09-21: bumped Node 20 -> 22 -- @supabase/supabase-js is also a web/ dependency, same engines requirement.)
 
 - [ ] **Step 2: Add the anon key secret and enable Pages**
 
