@@ -60,6 +60,32 @@ export async function fetchMyBonusAnswers(bonusQuestionIds, playerId) {
   return data
 }
 
+export async function fetchEpisodeRevealData(episodeNumber) {
+  const { data: episode, error: episodeError } = await supabase
+    .from('episodes')
+    .select('*')
+    .eq('number', episodeNumber)
+    .single()
+  if (episodeError) throw episodeError
+
+  // players_public, not players — see the comment in fetchLeaderboardData
+  // above: a plain `players` select here would only return the caller's own
+  // row to a non-admin player under players_select's RLS.
+  const results = await Promise.all([
+    supabase.from('bakers').select('*'),
+    supabase.from('players_public').select('*'),
+    supabase.from('answers').select('*').eq('episode_id', episode.id),
+    supabase.from('bonus_questions').select('*').eq('episode_id', episode.id),
+    supabase.from('bonus_answers').select('*, bonus_questions!inner(episode_id)').eq('bonus_questions.episode_id', episode.id),
+    supabase.from('scores').select('*').eq('episode_id', episode.id),
+  ])
+  const firstError = results.find((r) => r.error)?.error
+  if (firstError) throw firstError
+  const [{ data: bakers }, { data: players }, { data: answers }, { data: bonusQuestions }, { data: bonusAnswers }, { data: scores }] = results
+
+  return { episode, bakers, players, answers, bonusQuestions, bonusAnswers, scores }
+}
+
 export async function fetchLeaderboardData() {
   // players_public, not players: players_select's RLS restricts full player
   // rows (which include email) to the caller's own row or an admin, so a
