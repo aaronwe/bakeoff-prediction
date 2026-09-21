@@ -23,8 +23,7 @@ Working on branch `bakeoff-implementation`, in a git worktree at
 `.worktrees/bakeoff-implementation` off of `main`. `main` only has the design
 spec/plan docs committed — all actual application code lives on this branch.
 
-**Tasks 1–12 of 16 are done:** implemented, two-stage reviewed (spec compliance +
-code quality), and committed. This covers:
+**All 16 tasks are done:** implemented, reviewed, and committed. This covers:
 
 - Repo scaffolding (`web/` React+Vite app, `scripts/` Node package)
 - Full Postgres schema + row-level security (`supabase/schema.sql`) — **not yet run
@@ -37,29 +36,46 @@ code quality), and committed. This covers:
   note/email lock, answer key entry + scoring + manual override (full admin app)
 - Email infrastructure: `scripts/lib/supabaseAdmin.mjs`, `mailer.mjs`,
   `emailTemplates.mjs`
+- Weekly send decision logic (unit tested) + `scripts/send-weekly-email.mjs`
+- Wednesday scoring reminder + weekly CSV backup script (unit tested)
+- GitHub Actions workflows: `thursday-send.yml`, `wednesday-reminder.yml`,
+  `deploy-web.yml`
 
-**Task 13 is in progress, uncommitted, unreviewed:**
-`scripts/lib/weeklyEmailDecision.mjs` and `scripts/lib/weeklyEmailDecision.test.mjs`
-exist on disk (untracked) and appear to match the plan's given spec for the
-send/remind decision logic, but they have **not** been run, tested, or been through
-the two-stage review process — treat them as a draft, not verified work. Task 13
-also still needs `scripts/send-weekly-email.mjs`, which doesn't exist yet.
+Tasks 1–12 went through this session's normal two-stage review (independent
+spec-compliance pass, then independent code-quality pass) as they were built.
+Tasks 13–14 were implemented by a separate session that also self-reviewed and
+fixed real issues (see its commits — each has a matching plan-doc sync noting what
+was fixed and why). Tasks 15–16 were implemented by that same separate session but
+initially had **no** evidence of a review pass, unlike every other task — this
+session gave them the review pass they'd skipped and found two real issues, both
+now fixed (see the "How this codebase was built" section below for what they were).
 
-**Tasks 14–16 not started:**
-
-- Task 14: Wednesday scoring reminder + weekly CSV backup script
-- Task 15: GitHub Actions workflows (the actual cron jobs)
-- Task 16: GitHub Pages deployment + final end-to-end manual QA
+**Nothing has been tested against live infrastructure yet** — see "Blocked on."
+Task 16's own final step is a real end-to-end manual QA pass once a live Supabase
+project + Gmail account exist; that pass has not happened yet.
 
 ## Blocked on (user's manual setup — Task 0 in the plan)
 
 No live Supabase project, Gmail account, or GitHub repo secrets exist yet. Nothing
-has been tested against real infrastructure — every task so far has been verified
-via `npm run build` / `npm test` / `npx oxlint` and hand-tracing logic, not live
-sign-in/data flows. Before real end-to-end testing (or Task 16's deployment) can
-happen, the project owner needs to complete Task 0 in the plan doc: create the
-Supabase project, get a Gmail App Password, configure Supabase Auth SMTP, and
-create the GitHub repo.
+has been tested against real infrastructure — every task has been verified via
+`npm run build` / `npm test` / `npx oxlint` and hand-tracing logic, not live
+sign-in/data flows. Before real end-to-end testing (or actually deploying to
+GitHub Pages / running the scheduled workflows for real) can happen, the project
+owner needs to complete Task 0 in the plan doc:
+
+1. Create a Supabase project, note the Project URL / anon key / service_role key
+2. Create a Gmail App Password (for both Supabase Auth SMTP and the weekly-email
+   scripts)
+3. Configure Supabase Auth → SMTP Settings to send via that Gmail account
+4. Create the GitHub repo and add it as this project's remote
+5. Once the repo exists: add GitHub Actions secrets — `SUPABASE_URL`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `GMAIL_USER`,
+   `GMAIL_APP_PASSWORD`, `SITE_URL` — matching exactly what the three workflow
+   files and `scripts/.env.example`/`web/.env.example` reference
+6. Push this branch's work to `main` on that repo, which triggers `deploy-web.yml`
+7. Update Supabase Auth's Site URL and the `SITE_URL`/`VITE_GITHUB_REPO` values
+   once the real GitHub Pages URL is known (Task 16, Step 4 in the plan)
+8. Do the real end-to-end manual QA pass described in Task 16's final step
 
 ## How this codebase was built
 
@@ -84,30 +100,44 @@ This process caught real bugs, including two critical security issues:
    "self or admin" silently broke the leaderboard/episode-reveal pages for every
    non-admin (they'd only ever see themselves). Fixed with a `players_public` view
    exposing just `id`/`display_name` to any authenticated user.
+4. **Duplicate-send risk** (Tasks 13/15-16) — `decideWeeklyAction` had no guard
+   against an already-sent episode, so an admin using the "Send now" GitHub Actions
+   link mid-week (Task 10) would get every real player emailed again when the
+   Thursday cron fired later for the same still-open, still-locked episode. Fixed
+   by checking `episode.email_sent_at` before deciding to send.
 
 Also fixed repeatedly across tasks: data-loading effects with no error handling or
 no stale-response guard (a `cancelled` flag pattern, now used consistently in
 `Leaderboard.jsx`, `EpisodeReveal.jsx`, `AdminDashboard.jsx`, `AdminRoster.jsx`,
 `AdminEpisode.jsx`), and mutation handlers with no shared busy-state guard against
 races between related actions (see `IntroNoteAndLock`'s shared `saving` flag across
-Save/Lock/Unlock in `AdminEpisode.jsx`).
+Save/Lock/Unlock in `AdminEpisode.jsx`). Also: all three GitHub Actions workflows
+originally pinned Node 20, but `@supabase/supabase-js` declares
+`engines.node >=22.0.0` — bumped to Node 22 everywhere.
 
-**If you're resuming implementation:** follow the same pattern — read the task's
-text directly from the plan doc (not a summary), implement it, verify what you can
-without live credentials, then get an independent spec-compliance pass and an
-independent code-quality pass before moving to the next task. When a review finds a
-real bug in the plan's own given code (not just the implementation), fix the actual
-files *and* sync the plan doc's code blocks to match, with a brief inline note
-explaining what changed and why — the plan doc is meant to stay accurate as the
-project's single source of truth.
+**If you're resuming work on this project** (e.g. after the user completes Task 0
+and wants real end-to-end verification, or if new features get added to the plan):
+follow the same pattern this project was built with — read the relevant section
+directly from the plan doc (not a summary), implement/verify it, then get an
+independent spec-compliance pass and an independent code-quality pass before
+considering it done. When a review finds a real bug in the plan's own given code
+(not just the implementation), fix the actual files *and* sync the plan doc's code
+blocks to match, with a brief inline note explaining what changed and why — the
+plan doc is meant to stay accurate as the project's single source of truth. If you
+pick up work another session started, check whether it actually went through this
+review process before trusting it (look for "fixed during review" notes in the
+plan doc near that section) — Tasks 15-16 here initially hadn't, and did have real
+bugs once reviewed.
 
 ## Tech stack
 
 React 19 + Vite + react-router-dom (HashRouter) + `@supabase/supabase-js` v2,
-vanilla CSS, on the frontend. Node 20 + nodemailer (`^10.0.10` — bumped from the
-plan's originally-specified `^6.9.0` due to unpatched CVEs in the 6.x line) for
-scripts. Vitest for unit tests in both `web/` and `scripts/` (only scoring logic
-and, eventually, the email send/remind decision logic are unit tested — everything
-else is manual QA by design, per the plan's testing approach). Supabase Postgres
-with row-level security as the entire backend — no custom API server. GitHub
-Actions for cron jobs and deployment (not yet built/wired).
+vanilla CSS, on the frontend. Node 22 (bumped from the plan's originally-specified
+20 — `@supabase/supabase-js` declares `engines.node >=22.0.0`) + nodemailer
+(`^10.0.10` — bumped from the plan's originally-specified `^6.9.0` due to
+unpatched CVEs in the 6.x line) for scripts. Vitest for unit tests in `web/`
+(scoring logic) and `scripts/` (weekly send/remind decision logic, CSV
+formatting) — everything else is manual QA by design, per the plan's testing
+approach. Supabase Postgres with row-level security as the entire backend — no
+custom API server. GitHub Actions for the two cron workflows and GitHub Pages
+deployment, all built and committed but not yet run for real.
