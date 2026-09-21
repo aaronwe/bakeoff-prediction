@@ -72,6 +72,7 @@ Two scheduled workflows in `.github/workflows/`, calling a shared Node script wi
   - If `email_locked_at` is set → sends every player the email (intro note, this week's questions, prior episode's results/leaderboard if scored) and stamps `email_sent_at`.
   - If not locked → emails the admin a reminder that the episode isn't finalized yet. Repeats daily until locked or manually sent.
 - **Wednesday reminder job**: sends the admin a plain reminder that it's scoring day. Scoring itself is a manual admin action (no fixed time assumed).
+- **Weekly backup job**: exports the current `scores` (and underlying `answers`/`bonus_answers`) tables to CSV, regardless of whether that week's episode has been scored yet. Writes a timestamped file to a `backups/` folder in the repo and commits it (durable, versioned history browsable on GitHub), and also emails the CSV to the admin as an attachment. Runs weekly (e.g., Thursday morning, alongside the send job).
 
 ## Error Handling & Edge Cases
 
