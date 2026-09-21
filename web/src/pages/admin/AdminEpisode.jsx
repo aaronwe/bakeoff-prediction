@@ -91,15 +91,27 @@ async function loadEpisodeData(episodeNumber) {
     .eq('number', episodeNumber)
     .maybeSingle()
   if (episodeError) throw episodeError
-  if (!ep) return { episode: null, bonusQuestions: [], allBakers: [], activeBakers: [], players: [] }
-  const [bqs, all, active, { data: playerRows, error: playersError }] = await Promise.all([
-    fetchBonusQuestions(ep.id),
-    fetchAllBakers(),
-    fetchActiveBakers(),
-    supabase.from('players').select('*'),
-  ])
+  if (!ep) {
+    return { episode: null, bonusQuestions: [], allBakers: [], activeBakers: [], players: [], scores: [] }
+  }
+  const [bqs, all, active, { data: playerRows, error: playersError }, { data: scoreRows, error: scoresError }] =
+    await Promise.all([
+      fetchBonusQuestions(ep.id),
+      fetchAllBakers(),
+      fetchActiveBakers(),
+      supabase.from('players').select('*'),
+      supabase.from('scores').select('*').eq('episode_id', ep.id),
+    ])
   if (playersError) throw playersError
-  return { episode: ep, bonusQuestions: bqs, allBakers: all, activeBakers: active, players: playerRows ?? [] }
+  if (scoresError) throw scoresError
+  return {
+    episode: ep,
+    bonusQuestions: bqs,
+    allBakers: all,
+    activeBakers: active,
+    players: playerRows ?? [],
+    scores: scoreRows ?? [],
+  }
 }
 
 function IntroNoteAndLock({ episode, onChanged }) {
@@ -373,35 +385,14 @@ function AnswerKeyAndScore({ episode, bonusQuestions, allBakers, onChanged }) {
   )
 }
 
-function ManualOverrides({ episode, players }) {
-  const [scores, setScores] = useState([])
+// scores comes from AdminEpisode's loadEpisodeData/reload — not fetched
+// locally — so it's always current after AnswerKeyAndScore recomputes
+// scores and calls onChanged(). A locally-fetched copy here would go stale
+// the moment scoring runs (mount effects don't re-run on a sibling's
+// reload), and blurring an input showing a stale total would silently
+// upsert that stale value over the real, just-computed one.
+function ManualOverrides({ episode, players, scores, onChanged }) {
   const [error, setError] = useState(null)
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      const { data, error: fetchError } = await supabase.from('scores').select('*').eq('episode_id', episode.id)
-      if (cancelled) return
-      if (fetchError) {
-        setError(fetchError.message)
-        return
-      }
-      setScores(data ?? [])
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [episode.id])
-
-  async function reload() {
-    const { data, error: fetchError } = await supabase.from('scores').select('*').eq('episode_id', episode.id)
-    if (fetchError) {
-      setError(fetchError.message)
-      return
-    }
-    setScores(data ?? [])
-  }
 
   async function handleOverride(playerId, newTotal) {
     setError(null)
@@ -420,7 +411,7 @@ function ManualOverrides({ episode, players }) {
       setError(upsertError.message)
       return
     }
-    await reload()
+    await onChanged()
   }
 
   if (episode.status !== 'scored') return null
@@ -440,6 +431,13 @@ function ManualOverrides({ episode, players }) {
                 <td>{p.display_name}</td>
                 <td>
                   <input
+                    // Keyed by the displayed total, not just p.id: this is an
+                    // uncontrolled input (defaultValue), which React only
+                    // applies on mount — without this, a fresh total flowing
+                    // in from a recompute wouldn't visually update an input
+                    // the admin isn't actively editing, and blurring it would
+                    // re-submit the stale number shown.
+                    key={`${p.id}-${s?.total ?? 0}`}
                     type="number"
                     defaultValue={s?.total ?? 0}
                     onBlur={(e) => handleOverride(p.id, e.target.value)}
@@ -464,6 +462,7 @@ export default function AdminEpisode() {
   const [allBakers, setAllBakers] = useState([])
   const [activeBakers, setActiveBakers] = useState([])
   const [players, setPlayers] = useState([])
+  const [scores, setScores] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [retryCount, setRetryCount] = useState(0)
@@ -482,6 +481,7 @@ export default function AdminEpisode() {
         setAllBakers(result.allBakers)
         setActiveBakers(result.activeBakers)
         setPlayers(result.players)
+        setScores(result.scores)
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err.message)
@@ -502,6 +502,7 @@ export default function AdminEpisode() {
       setAllBakers(result.allBakers)
       setActiveBakers(result.activeBakers)
       setPlayers(result.players)
+      setScores(result.scores)
     } catch (err) {
       setError(err.message)
     }
@@ -573,7 +574,7 @@ export default function AdminEpisode() {
           onChanged={reload}
         />
       )}
-      <ManualOverrides episode={episode} players={players} />
+      <ManualOverrides episode={episode} players={players} scores={scores} onChanged={reload} />
     </div>
   )
 }
