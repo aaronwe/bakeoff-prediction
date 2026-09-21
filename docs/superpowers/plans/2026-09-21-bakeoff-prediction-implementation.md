@@ -211,6 +211,10 @@ create table episodes (
   intro_note text,
   email_locked_at timestamptz,
   email_sent_at timestamptz,
+  -- No `on delete` action (defaults to restrict): the app has no "delete a
+  -- baker" feature, so this only matters for manual cleanup via the SQL
+  -- editor, where blocking a delete that would orphan an answer key is the
+  -- safer default over silently losing data via cascade/set null.
   technical_winner_baker_id uuid references bakers(id),
   star_baker_id uuid references bakers(id),
   eliminated_baker_id uuid references bakers(id),
@@ -323,6 +327,7 @@ insert into admins (email) values ('aaron@westernpriorities.org');
 
 create or replace function is_admin() returns boolean
 language sql stable
+set search_path = public
 as $$
   select exists (
     select 1 from admins where email = auth.jwt() ->> 'email'
@@ -331,12 +336,39 @@ $$;
 
 create or replace function current_player_id() returns uuid
 language sql stable
+set search_path = public
 as $$
   select id from players where email = auth.jwt() ->> 'email';
 $$;
 
+-- Used by answers/bonus_answers insert+update policies (both need the exact
+-- same "is this episode still open" check on both the old and new row, which
+-- is how the answers_update/bonus_answers_update with-check gap happened in
+-- the first place — one shared definition instead of four copies).
+create or replace function episode_is_open(target_episode_id uuid) returns boolean
+language sql stable
+set search_path = public
+as $$
+  select exists (
+    select 1 from episodes e where e.id = target_episode_id and e.status = 'open'
+  );
+$$;
+
+create or replace function bonus_question_is_open(target_bonus_question_id uuid) returns boolean
+language sql stable
+set search_path = public
+as $$
+  select exists (
+    select 1 from bonus_questions bq
+    join episodes e on e.id = bq.episode_id
+    where bq.id = target_bonus_question_id and e.status = 'open'
+  );
+$$;
+
 grant execute on function is_admin() to authenticated;
 grant execute on function current_player_id() to authenticated;
+grant execute on function episode_is_open(uuid) to authenticated;
+grant execute on function bonus_question_is_open(uuid) to authenticated;
 
 -- ── Row-level security ───────────────────────────────────────
 
@@ -380,15 +412,12 @@ create policy answers_select on answers for select using (
   or exists (select 1 from episodes e where e.id = episode_id and e.status = 'scored')
 );
 create policy answers_insert on answers for insert with check (
-  player_id = current_player_id()
-  and exists (select 1 from episodes e where e.id = episode_id and e.status = 'open')
+  player_id = current_player_id() and episode_is_open(episode_id)
 );
 create policy answers_update on answers for update using (
-  player_id = current_player_id()
-  and exists (select 1 from episodes e where e.id = episode_id and e.status = 'open')
+  player_id = current_player_id() and episode_is_open(episode_id)
 ) with check (
-  player_id = current_player_id()
-  and exists (select 1 from episodes e where e.id = episode_id and e.status = 'open')
+  player_id = current_player_id() and episode_is_open(episode_id)
 );
 
 create policy bonus_answers_select on bonus_answers for select using (
@@ -400,24 +429,12 @@ create policy bonus_answers_select on bonus_answers for select using (
   )
 );
 create policy bonus_answers_insert on bonus_answers for insert with check (
-  player_id = current_player_id()
-  and exists (
-    select 1 from bonus_questions bq join episodes e on e.id = bq.episode_id
-    where bq.id = bonus_question_id and e.status = 'open'
-  )
+  player_id = current_player_id() and bonus_question_is_open(bonus_question_id)
 );
 create policy bonus_answers_update on bonus_answers for update using (
-  player_id = current_player_id()
-  and exists (
-    select 1 from bonus_questions bq join episodes e on e.id = bq.episode_id
-    where bq.id = bonus_question_id and e.status = 'open'
-  )
+  player_id = current_player_id() and bonus_question_is_open(bonus_question_id)
 ) with check (
-  player_id = current_player_id()
-  and exists (
-    select 1 from bonus_questions bq join episodes e on e.id = bq.episode_id
-    where bq.id = bonus_question_id and e.status = 'open'
-  )
+  player_id = current_player_id() and bonus_question_is_open(bonus_question_id)
 );
 
 create policy scores_select on scores for select using (auth.role() = 'authenticated');
@@ -430,6 +447,8 @@ create policy admins_select on admins for select using (email = auth.jwt() ->> '
 ```
 
 (Three bugs found and fixed during Task 2 implementation review, 2026-09-21: (1) `admins_select` originally used `is_admin()`, which itself queries `admins` — since `admins` has RLS enabled, that query re-triggers `admins_select`, causing infinite recursion that would break every admin-gated policy in the schema. Fixed by making `admins_select` a direct self-row check instead. (2) `answers_update`/`bonus_answers_update`'s `with check` clauses didn't re-verify the episode was still `open` for the *new* row values, only the `using` clause checked the existing row — a gap versus "players can edit answers only while open." Fixed by adding the same episode-status check to both `with check` clauses. (3) **Critical:** RLS is row-level, not column-level — once an episode is `open` (not `draft`), `episodes_select` exposes the *entire* row to every player, including the answer-key columns (`technical_winner_baker_id`, `star_baker_id`, `eliminated_baker_id`, `handshake_count`), and the same was true of `bonus_questions.correct_answer`. Since the admin workflow originally had "enter the answer key" and "score" as two separate persisted steps, any answer key entered before the admin clicked "Score" would be readable by any player via the browser's already-loaded Supabase client — who could then edit their own still-`open` answer to match before scoring ran, i.e. a real path to a guaranteed-perfect score, not just a spoiler. Fixed with the `episodes_answer_key_only_when_scored` CHECK constraint and the `bonus_questions_correct_answer_guard` trigger above, which make it impossible for these columns to hold a value unless the episode is already `scored` — enforced by Postgres itself, not just app code. This requires the admin UI to write the answer key and flip status to `scored` as a single atomic action rather than two separate saves; **Task 11 below reflects this** (a combined "Enter answer key & score" step, not a separate persisted "save answer key" step).)
+
+(Additional polish from the Task 2 code quality review, same date: the `using`/`with check` "episode is open" subquery that had already caused one bug was duplicated four times across `answers_insert`/`answers_update`/`bonus_answers_insert`/`bonus_answers_update` — extracted into `episode_is_open()`/`bonus_question_is_open()` helper functions instead, both called from all four policies. Added `set search_path = public` to all four helper functions per standard Supabase-advisor guidance. Added a comment explaining why `technical_winner_baker_id`/`star_baker_id`/`eliminated_baker_id` deliberately have no `on delete` action — there's no "delete a baker" feature in this plan, so blocking such a delete rather than cascading/nulling is the safer default for the manual-SQL-editor case where it could matter.)
 
 - [ ] **Step 2: Run it against your Supabase project**
 

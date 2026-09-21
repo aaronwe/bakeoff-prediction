@@ -22,6 +22,10 @@ create table episodes (
   intro_note text,
   email_locked_at timestamptz,
   email_sent_at timestamptz,
+  -- No `on delete` action (defaults to restrict): the app has no "delete a
+  -- baker" feature, so this only matters for manual cleanup via the SQL
+  -- editor, where blocking a delete that would orphan an answer key is the
+  -- safer default over silently losing data via cascade/set null.
   technical_winner_baker_id uuid references bakers(id),
   star_baker_id uuid references bakers(id),
   eliminated_baker_id uuid references bakers(id),
@@ -134,6 +138,7 @@ insert into admins (email) values ('aaron@westernpriorities.org');
 
 create or replace function is_admin() returns boolean
 language sql stable
+set search_path = public
 as $$
   select exists (
     select 1 from admins where email = auth.jwt() ->> 'email'
@@ -142,12 +147,39 @@ $$;
 
 create or replace function current_player_id() returns uuid
 language sql stable
+set search_path = public
 as $$
   select id from players where email = auth.jwt() ->> 'email';
 $$;
 
+-- Used by answers/bonus_answers insert+update policies (both need the exact
+-- same "is this episode still open" check on both the old and new row, which
+-- is how the answers_update/bonus_answers_update with-check gap happened in
+-- the first place — one shared definition instead of four copies).
+create or replace function episode_is_open(target_episode_id uuid) returns boolean
+language sql stable
+set search_path = public
+as $$
+  select exists (
+    select 1 from episodes e where e.id = target_episode_id and e.status = 'open'
+  );
+$$;
+
+create or replace function bonus_question_is_open(target_bonus_question_id uuid) returns boolean
+language sql stable
+set search_path = public
+as $$
+  select exists (
+    select 1 from bonus_questions bq
+    join episodes e on e.id = bq.episode_id
+    where bq.id = target_bonus_question_id and e.status = 'open'
+  );
+$$;
+
 grant execute on function is_admin() to authenticated;
 grant execute on function current_player_id() to authenticated;
+grant execute on function episode_is_open(uuid) to authenticated;
+grant execute on function bonus_question_is_open(uuid) to authenticated;
 
 -- ── Row-level security ───────────────────────────────────────
 
@@ -191,15 +223,12 @@ create policy answers_select on answers for select using (
   or exists (select 1 from episodes e where e.id = episode_id and e.status = 'scored')
 );
 create policy answers_insert on answers for insert with check (
-  player_id = current_player_id()
-  and exists (select 1 from episodes e where e.id = episode_id and e.status = 'open')
+  player_id = current_player_id() and episode_is_open(episode_id)
 );
 create policy answers_update on answers for update using (
-  player_id = current_player_id()
-  and exists (select 1 from episodes e where e.id = episode_id and e.status = 'open')
+  player_id = current_player_id() and episode_is_open(episode_id)
 ) with check (
-  player_id = current_player_id()
-  and exists (select 1 from episodes e where e.id = episode_id and e.status = 'open')
+  player_id = current_player_id() and episode_is_open(episode_id)
 );
 
 create policy bonus_answers_select on bonus_answers for select using (
@@ -211,24 +240,12 @@ create policy bonus_answers_select on bonus_answers for select using (
   )
 );
 create policy bonus_answers_insert on bonus_answers for insert with check (
-  player_id = current_player_id()
-  and exists (
-    select 1 from bonus_questions bq join episodes e on e.id = bq.episode_id
-    where bq.id = bonus_question_id and e.status = 'open'
-  )
+  player_id = current_player_id() and bonus_question_is_open(bonus_question_id)
 );
 create policy bonus_answers_update on bonus_answers for update using (
-  player_id = current_player_id()
-  and exists (
-    select 1 from bonus_questions bq join episodes e on e.id = bq.episode_id
-    where bq.id = bonus_question_id and e.status = 'open'
-  )
+  player_id = current_player_id() and bonus_question_is_open(bonus_question_id)
 ) with check (
-  player_id = current_player_id()
-  and exists (
-    select 1 from bonus_questions bq join episodes e on e.id = bq.episode_id
-    where bq.id = bonus_question_id and e.status = 'open'
-  )
+  player_id = current_player_id() and bonus_question_is_open(bonus_question_id)
 );
 
 create policy scores_select on scores for select using (auth.role() = 'authenticated');
