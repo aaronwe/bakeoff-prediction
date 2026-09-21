@@ -2121,32 +2121,91 @@ function NewBonusQuestionForm({ episodeId, onAdded }) {
   )
 }
 
+// Fetches everything the admin episode page needs and either returns it or
+// throws — shared by the mount/param-change effect below (which needs a
+// `cancelled` guard, since `number` can change while this component stays
+// mounted) and by reload(), which callers invoke directly after a mutation.
+// Defined at module scope (taking episodeNumber explicitly, rather than
+// closing over component state) so its identity is stable across renders.
+async function loadEpisodeData(episodeNumber) {
+  // maybeSingle, not single: a nonexistent episode number should surface as
+  // `episode: null` (a normal, recoverable "not found" render) rather than
+  // a thrown fetch error that leaves the page stuck on the error/retry view
+  // forever, since retrying can never make a bad episode number exist.
+  const { data: ep, error: episodeError } = await supabase
+    .from('episodes')
+    .select('*')
+    .eq('number', episodeNumber)
+    .maybeSingle()
+  if (episodeError) throw episodeError
+  if (!ep) return { episode: null, bonusQuestions: [], allBakers: [], activeBakers: [] }
+  const [bqs, all, active] = await Promise.all([
+    fetchBonusQuestions(ep.id),
+    fetchAllBakers(),
+    fetchActiveBakers(),
+  ])
+  return { episode: ep, bonusQuestions: bqs, allBakers: all, activeBakers: active }
+}
+
 export default function AdminEpisode() {
   const { number } = useParams()
   const [episode, setEpisode] = useState(null)
   const [bonusQuestions, setBonusQuestions] = useState([])
   const [allBakers, setAllBakers] = useState([])
   const [activeBakers, setActiveBakers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
+  const [retryCount, setRetryCount] = useState(0)
   const [error, setError] = useState(null)
-
-  async function reload() {
-    const { data: ep } = await supabase.from('episodes').select('*').eq('number', Number(number)).single()
-    setEpisode(ep)
-    if (ep) setBonusQuestions(await fetchBonusQuestions(ep.id))
-    setAllBakers(await fetchAllBakers())
-    setActiveBakers(await fetchActiveBakers())
-  }
+  const [publishing, setPublishing] = useState(false)
 
   useEffect(() => {
-    reload()
-  }, [number])
+    let cancelled = false
+    setLoading(true)
+    setLoadError(null)
+    loadEpisodeData(Number(number))
+      .then((result) => {
+        if (cancelled) return
+        setEpisode(result.episode)
+        setBonusQuestions(result.bonusQuestions)
+        setAllBakers(result.allBakers)
+        setActiveBakers(result.activeBakers)
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [number, retryCount])
+
+  async function reload() {
+    try {
+      const result = await loadEpisodeData(Number(number))
+      setEpisode(result.episode)
+      setBonusQuestions(result.bonusQuestions)
+      setAllBakers(result.allBakers)
+      setActiveBakers(result.activeBakers)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   async function handlePublish() {
     setError(null)
+    setPublishing(true)
+    // .eq('status', 'draft') guards against a double-click racing two
+    // publishes; the disabled button below is the first line of defense,
+    // this is the one that actually matters.
     const { error: updateError } = await supabase
       .from('episodes')
       .update({ status: 'open' })
       .eq('id', episode.id)
+      .eq('status', 'draft')
+    setPublishing(false)
     if (updateError) {
       setError(updateError.message)
       return
@@ -2154,7 +2213,18 @@ export default function AdminEpisode() {
     await reload()
   }
 
-  if (!episode) return <p>Loading…</p>
+  if (loading) return <p>Loading…</p>
+
+  if (loadError) {
+    return (
+      <div>
+        <p className="error">Couldn't load this episode: {loadError}</p>
+        <button onClick={() => setRetryCount((n) => n + 1)}>Try again</button>
+      </div>
+    )
+  }
+
+  if (!episode) return <p>Episode not found.</p>
 
   return (
     <div>
@@ -2162,7 +2232,7 @@ export default function AdminEpisode() {
       {error && <p className="error">{error}</p>}
 
       {episode.status === 'draft' && (
-        <button onClick={handlePublish}>Publish (open for predictions)</button>
+        <button onClick={handlePublish} disabled={publishing}>Publish (open for predictions)</button>
       )}
 
       <h3>Bonus questions</h3>
@@ -2178,6 +2248,8 @@ export default function AdminEpisode() {
   )
 }
 ```
+
+(Rewritten during Task 9 implementation and its code quality review, 2026-09-21: the original reload()/useEffect here had no error handling and no cancelled-guard on a param-dependent effect (the same bug class already fixed in Leaderboard.jsx/EpisodeReveal.jsx/AdminDashboard.jsx/AdminRoster.jsx), reachable since an admin can navigate between episode numbers without this component unmounting. Fixed by hoisting the fetch to a module-scope loadEpisodeData(episodeNumber) helper shared by the mount effect and reload(), with a cancelled guard and a loadError/retry state. Also switched the episode lookup from .single() to .maybeSingle() so a nonexistent episode number renders 'Episode not found' (a real, recoverable state) instead of becoming a permanent loadError that a Try again button can never fix, and added a status='draft' filter plus a publishing flag to handlePublish to prevent a double-click from racing two publishes. Tasks 10-11 extend this component by adding more fields to loadEpisodeData's Promise.all and one more set___ call in both the mount effect and reload(), not by touching this pattern itself.)
 
 - [ ] **Step 3: Add routes**
 
