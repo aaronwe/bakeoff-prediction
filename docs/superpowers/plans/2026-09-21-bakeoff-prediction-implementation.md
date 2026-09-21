@@ -1148,7 +1148,6 @@ Create `web/src/components/WeeklyForm.jsx`:
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import {
-  fetchActiveBakers,
   fetchBonusQuestions,
   fetchMyAnswer,
   fetchMyBonusAnswers,
@@ -1173,6 +1172,8 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
   const [handshakeGuess, setHandshakeGuess] = useState('')
   const [bonusAnswerText, setBonusAnswerText] = useState({})
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
+  const [retryCount, setRetryCount] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(false)
@@ -1181,27 +1182,33 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
     let cancelled = false
     async function load() {
       setLoading(true)
-      const bqs = await fetchBonusQuestions(episode.id)
-      const existingAnswer = await fetchMyAnswer(episode.id, player.id)
-      const existingBonus = await fetchMyBonusAnswers(bqs.map((b) => b.id), player.id)
-      if (cancelled) return
-      setBonusQuestions(bqs)
-      if (existingAnswer) {
-        setTechnicalPick(existingAnswer.technical_pick_id ?? '')
-        setStarBakerPick(existingAnswer.star_baker_pick_id ?? '')
-        setEliminatedPick(existingAnswer.eliminated_pick_id ?? '')
-        setHandshakeGuess(existingAnswer.handshake_guess ?? '')
+      setLoadError(null)
+      try {
+        const bqs = await fetchBonusQuestions(episode.id)
+        const existingAnswer = await fetchMyAnswer(episode.id, player.id)
+        const existingBonus = await fetchMyBonusAnswers(bqs.map((b) => b.id), player.id)
+        if (cancelled) return
+        setBonusQuestions(bqs)
+        if (existingAnswer) {
+          setTechnicalPick(existingAnswer.technical_pick_id ?? '')
+          setStarBakerPick(existingAnswer.star_baker_pick_id ?? '')
+          setEliminatedPick(existingAnswer.eliminated_pick_id ?? '')
+          setHandshakeGuess(existingAnswer.handshake_guess ?? '')
+        }
+        const bonusMap = {}
+        for (const ba of existingBonus) bonusMap[ba.bonus_question_id] = ba.answer_text
+        setBonusAnswerText(bonusMap)
+      } catch (err) {
+        if (!cancelled) setLoadError(err.message)
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-      const bonusMap = {}
-      for (const ba of existingBonus) bonusMap[ba.bonus_question_id] = ba.answer_text
-      setBonusAnswerText(bonusMap)
-      setLoading(false)
     }
     load()
     return () => {
       cancelled = true
     }
-  }, [episode.id, player.id])
+  }, [episode.id, player.id, retryCount])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -1227,11 +1234,13 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
       return
     }
 
+    // Always upsert, even a blank answer (as null) — skipping blank fields
+    // would silently keep a previously-saved answer in place while the UI
+    // told the player their (cleared) answer was saved.
     for (const bq of bonusQuestions) {
-      const text = bonusAnswerText[bq.id]
-      if (text === undefined || text === '') continue
+      const text = bonusAnswerText[bq.id] ?? ''
       const { error: bonusError } = await supabase.from('bonus_answers').upsert(
-        { bonus_question_id: bq.id, player_id: player.id, answer_text: text },
+        { bonus_question_id: bq.id, player_id: player.id, answer_text: text || null },
         { onConflict: 'bonus_question_id,player_id' },
       )
       if (bonusError) {
@@ -1246,6 +1255,15 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
   }
 
   if (loading) return <p>Loading this week's questions…</p>
+
+  if (loadError) {
+    return (
+      <div>
+        <p className="error">Couldn't load this week's questions: {loadError}</p>
+        <button onClick={() => setRetryCount((n) => n + 1)}>Try again</button>
+      </div>
+    )
+  }
 
   return (
     <form onSubmit={handleSubmit}>
@@ -1349,32 +1367,49 @@ export default function Home() {
   const [allBakers, setAllBakers] = useState([])
   const [activeBakers, setActiveBakers] = useState([])
   const [episodeLoading, setEpisodeLoading] = useState(true)
+  const [episodeLoadError, setEpisodeLoadError] = useState(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
     if (!player) return
     let cancelled = false
     async function load() {
-      const [ep, active, all] = await Promise.all([
-        fetchOpenEpisode(),
-        fetchActiveBakers(),
-        fetchAllBakers(),
-      ])
-      if (cancelled) return
-      setEpisode(ep)
-      setActiveBakers(active)
-      setAllBakers(all)
-      setEpisodeLoading(false)
+      setEpisodeLoading(true)
+      setEpisodeLoadError(null)
+      try {
+        const [ep, active, all] = await Promise.all([
+          fetchOpenEpisode(),
+          fetchActiveBakers(),
+          fetchAllBakers(),
+        ])
+        if (cancelled) return
+        setEpisode(ep)
+        setActiveBakers(active)
+        setAllBakers(all)
+      } catch (err) {
+        if (!cancelled) setEpisodeLoadError(err.message)
+      } finally {
+        if (!cancelled) setEpisodeLoading(false)
+      }
     }
     load()
     return () => {
       cancelled = true
     }
-  }, [player])
+  }, [player, retryCount])
 
   if (loading) return <p>Loading…</p>
   if (!session) return <SignInForm />
   if (!player) return <OnboardingForm />
   if (episodeLoading) return <p>Loading…</p>
+  if (episodeLoadError) {
+    return (
+      <div>
+        <p className="error">Couldn't load this week's episode: {episodeLoadError}</p>
+        <button onClick={() => setRetryCount((n) => n + 1)}>Try again</button>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -1388,6 +1423,8 @@ export default function Home() {
   )
 }
 ```
+
+(Fixed during Task 5 code quality review, 2026-09-21: the snippet originally had no error handling in either `Home`'s or `WeeklyForm`'s data-loading effect, so a thrown Supabase error left the player stuck on "Loading…" forever with no way to recover short of a manual page refresh. Added `try`/`catch`/`finally` around each load, an error state, and a "Try again" button (via a `retryCount` dependency that re-triggers the effect). Also fixed `WeeklyForm`'s submit loop: it used to skip upserting a bonus answer left blank, silently keeping a previously-saved value in place while still showing "Saved!" — misleading if a player cleared an answer on purpose. It now always upserts (writing `null` for a blank answer) so a clear is honored, not silently ignored.)
 
 - [ ] **Step 4: Manually verify**
 

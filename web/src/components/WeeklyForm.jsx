@@ -25,6 +25,8 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
   const [handshakeGuess, setHandshakeGuess] = useState('')
   const [bonusAnswerText, setBonusAnswerText] = useState({})
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
+  const [retryCount, setRetryCount] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(false)
@@ -33,27 +35,33 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
     let cancelled = false
     async function load() {
       setLoading(true)
-      const bqs = await fetchBonusQuestions(episode.id)
-      const existingAnswer = await fetchMyAnswer(episode.id, player.id)
-      const existingBonus = await fetchMyBonusAnswers(bqs.map((b) => b.id), player.id)
-      if (cancelled) return
-      setBonusQuestions(bqs)
-      if (existingAnswer) {
-        setTechnicalPick(existingAnswer.technical_pick_id ?? '')
-        setStarBakerPick(existingAnswer.star_baker_pick_id ?? '')
-        setEliminatedPick(existingAnswer.eliminated_pick_id ?? '')
-        setHandshakeGuess(existingAnswer.handshake_guess ?? '')
+      setLoadError(null)
+      try {
+        const bqs = await fetchBonusQuestions(episode.id)
+        const existingAnswer = await fetchMyAnswer(episode.id, player.id)
+        const existingBonus = await fetchMyBonusAnswers(bqs.map((b) => b.id), player.id)
+        if (cancelled) return
+        setBonusQuestions(bqs)
+        if (existingAnswer) {
+          setTechnicalPick(existingAnswer.technical_pick_id ?? '')
+          setStarBakerPick(existingAnswer.star_baker_pick_id ?? '')
+          setEliminatedPick(existingAnswer.eliminated_pick_id ?? '')
+          setHandshakeGuess(existingAnswer.handshake_guess ?? '')
+        }
+        const bonusMap = {}
+        for (const ba of existingBonus) bonusMap[ba.bonus_question_id] = ba.answer_text
+        setBonusAnswerText(bonusMap)
+      } catch (err) {
+        if (!cancelled) setLoadError(err.message)
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-      const bonusMap = {}
-      for (const ba of existingBonus) bonusMap[ba.bonus_question_id] = ba.answer_text
-      setBonusAnswerText(bonusMap)
-      setLoading(false)
     }
     load()
     return () => {
       cancelled = true
     }
-  }, [episode.id, player.id])
+  }, [episode.id, player.id, retryCount])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -79,11 +87,13 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
       return
     }
 
+    // Always upsert, even a blank answer (as null) — skipping blank fields
+    // would silently keep a previously-saved answer in place while the UI
+    // told the player their (cleared) answer was saved.
     for (const bq of bonusQuestions) {
-      const text = bonusAnswerText[bq.id]
-      if (text === undefined || text === '') continue
+      const text = bonusAnswerText[bq.id] ?? ''
       const { error: bonusError } = await supabase.from('bonus_answers').upsert(
-        { bonus_question_id: bq.id, player_id: player.id, answer_text: text },
+        { bonus_question_id: bq.id, player_id: player.id, answer_text: text || null },
         { onConflict: 'bonus_question_id,player_id' },
       )
       if (bonusError) {
@@ -98,6 +108,15 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
   }
 
   if (loading) return <p>Loading this week's questions…</p>
+
+  if (loadError) {
+    return (
+      <div>
+        <p className="error">Couldn't load this week's questions: {loadError}</p>
+        <button onClick={() => setRetryCount((n) => n + 1)}>Try again</button>
+      </div>
+    )
+  }
 
   return (
     <form onSubmit={handleSubmit}>

@@ -89,32 +89,49 @@ export default function Home() {
   const [allBakers, setAllBakers] = useState([])
   const [activeBakers, setActiveBakers] = useState([])
   const [episodeLoading, setEpisodeLoading] = useState(true)
+  const [episodeLoadError, setEpisodeLoadError] = useState(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
     if (!player) return
     let cancelled = false
     async function load() {
-      const [ep, active, all] = await Promise.all([
-        fetchOpenEpisode(),
-        fetchActiveBakers(),
-        fetchAllBakers(),
-      ])
-      if (cancelled) return
-      setEpisode(ep)
-      setActiveBakers(active)
-      setAllBakers(all)
-      setEpisodeLoading(false)
+      setEpisodeLoading(true)
+      setEpisodeLoadError(null)
+      try {
+        const [ep, active, all] = await Promise.all([
+          fetchOpenEpisode(),
+          fetchActiveBakers(),
+          fetchAllBakers(),
+        ])
+        if (cancelled) return
+        setEpisode(ep)
+        setActiveBakers(active)
+        setAllBakers(all)
+      } catch (err) {
+        if (!cancelled) setEpisodeLoadError(err.message)
+      } finally {
+        if (!cancelled) setEpisodeLoading(false)
+      }
     }
     load()
     return () => {
       cancelled = true
     }
-  }, [player])
+  }, [player, retryCount])
 
   if (loading) return <p>Loading…</p>
   if (!session) return <SignInForm />
   if (!player) return <OnboardingForm />
   if (episodeLoading) return <p>Loading…</p>
+  if (episodeLoadError) {
+    return (
+      <div>
+        <p className="error">Couldn't load this week's episode: {episodeLoadError}</p>
+        <button onClick={() => setRetryCount((n) => n + 1)}>Try again</button>
+      </div>
+    )
+  }
 
   return (
     <div>
