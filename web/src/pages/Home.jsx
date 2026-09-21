@@ -10,6 +10,10 @@ function SignInForm() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError(null)
+    // Safe with HashRouter: Supabase's implicit auth flow puts the session
+    // token in the URL hash fragment (#access_token=...), which the auth
+    // client reads directly from window.location.hash on load — independent
+    // of, and before, HashRouter's own hash-based route matching.
     const { error: signInError } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: window.location.origin + window.location.pathname },

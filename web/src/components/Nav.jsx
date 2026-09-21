@@ -11,7 +11,9 @@ export default function Nav() {
       {session && <Link to="/leaderboard">Leaderboard</Link>}
       {isAdmin && <Link to="/admin">Admin</Link>}
       {session && (
-        <button onClick={() => supabase.auth.signOut()}>Sign out</button>
+        <button onClick={() => supabase.auth.signOut().catch((err) => console.error('Sign out failed:', err))}>
+          Sign out
+        </button>
       )}
     </nav>
   )

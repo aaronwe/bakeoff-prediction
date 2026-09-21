@@ -521,12 +521,11 @@ export function AuthProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      setSession(data.session)
-      await loadPlayerAndAdmin(data.session)
-      setLoading(false)
-    })
-
+    // onAuthStateChange alone (no separate getSession() call) is intentional:
+    // it fires an INITIAL_SESSION event on mount carrying the same data
+    // getSession() would return, so calling both would fetch player/admin
+    // state twice on every load and risks a stale getSession() resolution
+    // overwriting a newer session from a later auth event.
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setSession(newSession)
       setLoading(true)
@@ -554,6 +553,8 @@ export function useAuth() {
   return ctx
 }
 ```
+
+(Fixed during Task 3 code quality review, 2026-09-21: the snippet above originally also called `supabase.auth.getSession().then(...)` alongside the `onAuthStateChange` subscription. Since `onAuthStateChange` fires an `INITIAL_SESSION` event on mount with the same data, this caused a redundant double-fetch of player/admin state on every page load — plus a narrow race where the `getSession()` promise could resolve after a later auth event and overwrite its newer session with a stale one. Removed the separate `getSession()` call; `onAuthStateChange`'s initial event covers it.)
 
 - [ ] **Step 3: Create route guards**
 
@@ -603,7 +604,9 @@ export default function Nav() {
       {session && <Link to="/leaderboard">Leaderboard</Link>}
       {isAdmin && <Link to="/admin">Admin</Link>}
       {session && (
-        <button onClick={() => supabase.auth.signOut()}>Sign out</button>
+        <button onClick={() => supabase.auth.signOut().catch((err) => console.error('Sign out failed:', err))}>
+          Sign out
+        </button>
       )}
     </nav>
   )
@@ -627,6 +630,10 @@ function SignInForm() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError(null)
+    // Safe with HashRouter: Supabase's implicit auth flow puts the session
+    // token in the URL hash fragment (#access_token=...), which the auth
+    // client reads directly from window.location.hash on load — independent
+    // of, and before, HashRouter's own hash-based route matching.
     const { error: signInError } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: window.location.origin + window.location.pathname },

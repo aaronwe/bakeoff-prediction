@@ -25,12 +25,11 @@ export function AuthProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      setSession(data.session)
-      await loadPlayerAndAdmin(data.session)
-      setLoading(false)
-    })
-
+    // onAuthStateChange alone (no separate getSession() call) is intentional:
+    // it fires an INITIAL_SESSION event on mount carrying the same data
+    // getSession() would return, so calling both caused every page load to
+    // fetch the player/admin state twice and risked a stale getSession()
+    // resolution overwriting a newer session from a later auth event.
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setSession(newSession)
       setLoading(true)
