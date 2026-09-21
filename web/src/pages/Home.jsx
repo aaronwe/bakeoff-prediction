@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
+import { fetchOpenEpisode, fetchActiveBakers, fetchAllBakers } from '../lib/queries'
+import WeeklyForm from '../components/WeeklyForm'
 
 function SignInForm() {
   const [email, setEmail] = useState('')
@@ -83,10 +85,45 @@ function OnboardingForm() {
 
 export default function Home() {
   const { session, player, loading } = useAuth()
+  const [episode, setEpisode] = useState(null)
+  const [allBakers, setAllBakers] = useState([])
+  const [activeBakers, setActiveBakers] = useState([])
+  const [episodeLoading, setEpisodeLoading] = useState(true)
+
+  useEffect(() => {
+    if (!player) return
+    let cancelled = false
+    async function load() {
+      const [ep, active, all] = await Promise.all([
+        fetchOpenEpisode(),
+        fetchActiveBakers(),
+        fetchAllBakers(),
+      ])
+      if (cancelled) return
+      setEpisode(ep)
+      setActiveBakers(active)
+      setAllBakers(all)
+      setEpisodeLoading(false)
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [player])
 
   if (loading) return <p>Loading…</p>
   if (!session) return <SignInForm />
   if (!player) return <OnboardingForm />
+  if (episodeLoading) return <p>Loading…</p>
 
-  return <p>Welcome back, {player.display_name}. (Weekly questions coming in a later task.)</p>
+  return (
+    <div>
+      <p>Welcome back, {player.display_name}.</p>
+      {episode ? (
+        <WeeklyForm episode={episode} player={player} allBakers={allBakers} activeBakers={activeBakers} />
+      ) : (
+        <p>No episode is open for predictions right now — check back soon.</p>
+      )}
+    </div>
+  )
 }
