@@ -2299,6 +2299,10 @@ Edit `web/src/pages/admin/AdminEpisode.jsx`. Add state and a new section. Add to
 function IntroNoteAndLock({ episode, onChanged }) {
   const [introNote, setIntroNote] = useState(episode.intro_note ?? '')
   const [error, setError] = useState(null)
+  // One flag shared by all three actions, not a separate one per button:
+  // they all write to the same episode row (intro_note and/or
+  // email_locked_at), so letting one fire while another is still in flight
+  // risks a last-write-wins race that silently reverts a just-saved note.
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -2326,10 +2330,12 @@ function IntroNoteAndLock({ episode, onChanged }) {
       setError('Write an intro note before locking.')
       return
     }
+    setSaving(true)
     const { error: updateError } = await supabase
       .from('episodes')
       .update({ intro_note: introNote, email_locked_at: new Date().toISOString() })
       .eq('id', episode.id)
+    setSaving(false)
     if (updateError) {
       setError(updateError.message)
       return
@@ -2339,10 +2345,12 @@ function IntroNoteAndLock({ episode, onChanged }) {
 
   async function handleUnlock() {
     setError(null)
+    setSaving(true)
     const { error: updateError } = await supabase
       .from('episodes')
       .update({ email_locked_at: null })
       .eq('id', episode.id)
+    setSaving(false)
     if (updateError) {
       setError(updateError.message)
       return
@@ -2361,7 +2369,7 @@ function IntroNoteAndLock({ episode, onChanged }) {
       {episode.email_locked_at ? (
         <>
           <span> Locked and ready to send.</span>{' '}
-          <button onClick={handleUnlock}>Unlock</button>
+          <button onClick={handleUnlock} disabled={saving}>Unlock</button>
           {' '}
           <a
             href={`https://github.com/${import.meta.env.VITE_GITHUB_REPO}/actions/workflows/thursday-send.yml`}
@@ -2372,7 +2380,7 @@ function IntroNoteAndLock({ episode, onChanged }) {
           </a>
         </>
       ) : (
-        <button onClick={handleLock}>Lock &amp; ready to send</button>
+        <button onClick={handleLock} disabled={saving}>Lock &amp; ready to send</button>
       )}
       {episode.email_sent_at && <p>Email sent at {new Date(episode.email_sent_at).toLocaleString()}.</p>}
       {error && <p className="error">{error}</p>}
@@ -2380,6 +2388,8 @@ function IntroNoteAndLock({ episode, onChanged }) {
   )
 }
 ```
+
+(Fixed during Task 10 code quality review, 2026-09-21: `handleSaveNote`/`handleLock`/`handleUnlock` originally had no guard against each other, only against themselves — editing the note, clicking Lock, then quickly editing again and clicking Save (or vice versa) could let whichever request's response landed last silently overwrite the other's result, e.g. locking with a stale note. Now all three share one `saving` flag, and all three buttons disable while any of them is in flight.)
 
 The scheduled Thursday workflow (Task 15) is the normal path — locking is enough, the cron job picks it up automatically. This link exists purely so you're not stuck waiting for the next scheduled run if you finalize early: it deep-links to the same `thursday-send.yml` workflow's manual-run page in GitHub Actions, where a "Run workflow" button actually sends the email. A true one-click in-app send isn't possible without either exposing a GitHub token in the public frontend (a credential-exposure risk) or standing up a server/Edge Function just for this one action — both of which are overkill for a friends-and-family pool, so this link is the pragmatic equivalent.
 
