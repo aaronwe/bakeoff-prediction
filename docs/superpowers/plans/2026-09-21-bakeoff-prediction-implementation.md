@@ -2825,13 +2825,20 @@ let transporter
 
 function getTransporter() {
   if (!transporter) {
+    const user = process.env.GMAIL_USER
+    const pass = process.env.GMAIL_APP_PASSWORD
+
+    if (!user || !pass) {
+      throw new Error('GMAIL_USER and GMAIL_APP_PASSWORD must be set')
+    }
+
     transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
       secure: false,
       auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
+        user,
+        pass,
       },
     })
   }
@@ -2851,25 +2858,40 @@ export async function sendMail({ to, subject, html, text, attachments }) {
 }
 ```
 
+(Fixed during Task 12 implementation: added a fail-fast check for `GMAIL_USER`/`GMAIL_APP_PASSWORD` before constructing the transporter, matching `supabaseAdmin.mjs`'s pattern for its own required env vars — without it, a missing credential would only surface later as an opaque Gmail SMTP auth error instead of a clear, actionable message.)
+
 - [ ] **Step 3: Create email templates**
 
 Create `scripts/lib/emailTemplates.mjs`:
 
 ```js
+// Player display names (self-serve, no admin approval per the design's
+// "open signup" decision) and bonus question prompts both end up in this
+// HTML. Without escaping, a name/prompt containing `<`, `>`, or `&` would
+// visibly corrupt the email for every recipient, not just its own author.
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export function buildWeeklyEmailHtml({ episode, bonusQuestions, siteUrl, previousLeaderboard }) {
   const bonusList = bonusQuestions
-    .map((bq) => `<li>${bq.prompt} (${bq.points} pt${bq.points === 1 ? '' : 's'})</li>`)
+    .map((bq) => `<li>${escapeHtml(bq.prompt)} (${bq.points} pt${bq.points === 1 ? '' : 's'})</li>`)
     .join('')
 
   const leaderboardSection = previousLeaderboard
     ? `<h3>Standings after episode ${previousLeaderboard.episodeNumber}</h3>
-       <ol>${previousLeaderboard.rows.map((r) => `<li>${r.name}: ${r.total}</li>`).join('')}</ol>`
+       <ol>${previousLeaderboard.rows.map((r) => `<li>${escapeHtml(r.name)}: ${r.total}</li>`).join('')}</ol>`
     : ''
 
   return `
     <div>
       <h2>Episode ${episode.number} predictions are open!</h2>
-      ${episode.intro_note ? `<p>${episode.intro_note}</p>` : ''}
+      ${episode.intro_note ? `<p>${escapeHtml(episode.intro_note)}</p>` : ''}
       <p>This week's questions: technical winner, Star Baker, who goes home, handshake count${bonusQuestions.length ? ', plus bonus questions:' : '.'}</p>
       ${bonusQuestions.length ? `<ul>${bonusList}</ul>` : ''}
       <p><a href="${siteUrl}">Submit your predictions</a></p>
@@ -2888,6 +2910,8 @@ export function buildAdminReminderHtml({ episode, kind }) {
   return '<p>Reminder from the Bake Off Pool.</p>'
 }
 ```
+
+(Fixed during Task 12 code quality review, 2026-09-21: player display names — self-serve, no admin approval per this plan's own signup design — and bonus question prompts were interpolated into this HTML unescaped, so a name or prompt containing `<`, `>`, or `&` would corrupt the email for every recipient once Task 13 wires real leaderboard data through `buildWeeklyEmailHtml`. Added `escapeHtml()`.)
 
 - [ ] **Step 4: Manually verify locally**
 
