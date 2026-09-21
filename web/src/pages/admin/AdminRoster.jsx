@@ -8,7 +8,11 @@ export default function AdminRoster() {
   const [error, setError] = useState(null)
 
   async function reload() {
-    setBakers(await fetchAllBakers())
+    try {
+      setBakers(await fetchAllBakers())
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   useEffect(() => {

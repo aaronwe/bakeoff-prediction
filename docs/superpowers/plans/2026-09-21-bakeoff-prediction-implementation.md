@@ -1796,7 +1796,11 @@ export default function AdminRoster() {
   const [error, setError] = useState(null)
 
   async function reload() {
-    setBakers(await fetchAllBakers())
+    try {
+      setBakers(await fetchAllBakers())
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   useEffect(() => {
@@ -1865,6 +1869,8 @@ export default function AdminRoster() {
 }
 ```
 
+(Fixed during Task 8 self-review: `reload()` originally let a thrown error from `fetchAllBakers()` become an unhandled rejection with no feedback to the admin — wrapped in try/catch, surfacing the message via the existing `error` state.)
+
 - [ ] **Step 2: Build the admin dashboard (episode list + links)**
 
 Create `web/src/pages/admin/AdminDashboard.jsx`:
@@ -1876,13 +1882,26 @@ import { supabase } from '../../lib/supabaseClient'
 
 export default function AdminDashboard() {
   const [episodes, setEpisodes] = useState([])
+  const [error, setError] = useState(null)
 
   useEffect(() => {
+    let cancelled = false
+    setError(null)
     supabase
       .from('episodes')
       .select('*')
       .order('number', { ascending: false })
-      .then(({ data }) => setEpisodes(data ?? []))
+      .then(({ data, error: fetchError }) => {
+        if (cancelled) return
+        if (fetchError) {
+          setError(fetchError.message)
+          return
+        }
+        setEpisodes(data ?? [])
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return (
@@ -1894,6 +1913,7 @@ export default function AdminDashboard() {
       <p>
         <Link to="/admin/episodes/new">Create new episode</Link>
       </p>
+      {error && <p className="error">Couldn't load episodes: {error}</p>}
       <table>
         <thead>
           <tr>
@@ -1918,6 +1938,8 @@ export default function AdminDashboard() {
   )
 }
 ```
+
+(Fixed during Task 8 self-review: the episode-list effect originally had no `cancelled` guard or error handling — the same category of bug found in earlier tasks' reviews (Leaderboard/EpisodeReveal) — so a failed query would silently render an empty table. Matched the established pattern.)
 
 - [ ] **Step 3: Add routes**
 
