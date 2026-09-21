@@ -1484,10 +1484,32 @@ import { fetchLeaderboardData } from '../lib/queries'
 
 export default function Leaderboard() {
   const [data, setData] = useState(null)
+  const [error, setError] = useState(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
-    fetchLeaderboardData().then(setData)
-  }, [])
+    let cancelled = false
+    setError(null)
+    fetchLeaderboardData()
+      .then((result) => {
+        if (!cancelled) setData(result)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [retryCount])
+
+  if (error) {
+    return (
+      <div>
+        <p className="error">Couldn't load the leaderboard: {error}</p>
+        <button onClick={() => setRetryCount((n) => n + 1)}>Try again</button>
+      </div>
+    )
+  }
 
   if (!data) return <p>Loading…</p>
 
@@ -1587,15 +1609,17 @@ export async function fetchEpisodeRevealData(episodeNumber) {
     .single()
   if (episodeError) throw episodeError
 
-  const [{ data: bakers }, { data: players }, { data: answers }, { data: bonusQuestions }, { data: bonusAnswers }, { data: scores }] =
-    await Promise.all([
-      supabase.from('bakers').select('*'),
-      supabase.from('players').select('*'),
-      supabase.from('answers').select('*').eq('episode_id', episode.id),
-      supabase.from('bonus_questions').select('*').eq('episode_id', episode.id),
-      supabase.from('bonus_answers').select('*, bonus_questions!inner(episode_id)').eq('bonus_questions.episode_id', episode.id),
-      supabase.from('scores').select('*').eq('episode_id', episode.id),
-    ])
+  const results = await Promise.all([
+    supabase.from('bakers').select('*'),
+    supabase.from('players').select('*'),
+    supabase.from('answers').select('*').eq('episode_id', episode.id),
+    supabase.from('bonus_questions').select('*').eq('episode_id', episode.id),
+    supabase.from('bonus_answers').select('*, bonus_questions!inner(episode_id)').eq('bonus_questions.episode_id', episode.id),
+    supabase.from('scores').select('*').eq('episode_id', episode.id),
+  ])
+  const firstError = results.find((r) => r.error)?.error
+  if (firstError) throw firstError
+  const [{ data: bakers }, { data: players }, { data: answers }, { data: bonusQuestions }, { data: bonusAnswers }, { data: scores }] = results
 
   return { episode, bakers, players, answers, bonusQuestions, bonusAnswers, scores }
 }
