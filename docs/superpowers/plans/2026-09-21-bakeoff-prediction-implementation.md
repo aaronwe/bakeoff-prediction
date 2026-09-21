@@ -3014,6 +3014,8 @@ Expected: PASS — all 5 tests green.
 
 - [ ] **Step 5: Write the send script**
 
+(Fixed during Task 13 review, 2026-09-21: moved `getAdminEmails()` inside the remind branch to avoid an unnecessary DB query when sending, and added error checking to all queries (`bonus_questions`, `players`, `previousEpisode`, `scores`, and `episodes` update) to prevent silent failures or unhandled null dereferences.)
+
 Create `scripts/send-weekly-email.mjs`:
 
 ```js
@@ -3049,9 +3051,8 @@ async function main() {
     return
   }
 
-  const adminEmails = await getAdminEmails()
-
   if (decision.action === 'remind') {
+    const adminEmails = await getAdminEmails()
     const html = buildAdminReminderHtml({ episode, kind: 'not-locked' })
     for (const email of adminEmails) {
       await sendMail({ to: email, subject: `Episode ${episode.number} email isn't locked yet`, html, text: html.replace(/<[^>]+>/g, '') })
@@ -3061,25 +3062,31 @@ async function main() {
   }
 
   // decision.action === 'send'
-  const { data: bonusQuestions } = await supabaseAdmin
+  const { data: bonusQuestions, error: bonusError } = await supabaseAdmin
     .from('bonus_questions')
     .select('*')
     .eq('episode_id', episode.id)
+  if (bonusError) throw bonusError
 
-  const { data: players } = await supabaseAdmin.from('players').select('*')
+  const { data: players, error: playersError } = await supabaseAdmin.from('players').select('*')
+  if (playersError) throw playersError
 
   let previousLeaderboard = null
-  const { data: previousEpisode } = await supabaseAdmin
+  const { data: previousEpisode, error: prevEpError } = await supabaseAdmin
     .from('episodes')
     .select('*')
     .eq('number', episode.number - 1)
     .eq('status', 'scored')
     .maybeSingle()
+  if (prevEpError) throw prevEpError
+
   if (previousEpisode) {
-    const { data: prevScores } = await supabaseAdmin
+    const { data: prevScores, error: prevScoresError } = await supabaseAdmin
       .from('scores')
       .select('*')
       .eq('episode_id', previousEpisode.id)
+    if (prevScoresError) throw prevScoresError
+
     const rows = (prevScores ?? [])
       .map((s) => ({
         name: players.find((p) => p.id === s.player_id)?.display_name ?? 'Unknown',
@@ -3096,7 +3103,12 @@ async function main() {
     await sendMail({ to: player.email, subject: `Bake Off Pool: Episode ${episode.number} predictions are open`, html, text })
   }
 
-  await supabaseAdmin.from('episodes').update({ email_sent_at: new Date().toISOString() }).eq('id', episode.id)
+  const { error: updateError } = await supabaseAdmin
+    .from('episodes')
+    .update({ email_sent_at: new Date().toISOString() })
+    .eq('id', episode.id)
+  if (updateError) throw updateError
+
   console.log(`Sent weekly email to ${(players ?? []).length} player(s).`)
 }
 
