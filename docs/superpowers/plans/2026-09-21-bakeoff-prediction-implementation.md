@@ -1794,6 +1794,7 @@ export default function AdminRoster() {
   const [bakers, setBakers] = useState([])
   const [newName, setNewName] = useState('')
   const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(false)
 
   async function reload() {
     try {
@@ -1810,16 +1811,20 @@ export default function AdminRoster() {
   async function handleAdd(e) {
     e.preventDefault()
     setError(null)
-    const { error: insertError } = await supabase.from('bakers').insert({ name: newName })
+    setSaving(true)
+    const { error: insertError } = await supabase.from('bakers').insert({ name: newName.trim() })
     if (insertError) {
       setError(insertError.message)
+      setSaving(false)
       return
     }
     setNewName('')
+    setSaving(false)
     await reload()
   }
 
   async function toggleEliminated(baker) {
+    setError(null)
     const { error: updateError } = await supabase
       .from('bakers')
       .update({ eliminated: !baker.eliminated })
@@ -1839,7 +1844,7 @@ export default function AdminRoster() {
           Add a baker
           <input value={newName} onChange={(e) => setNewName(e.target.value)} required />
         </label>
-        <button type="submit">Add</button>
+        <button type="submit" disabled={saving}>Add</button>
       </form>
       {error && <p className="error">{error}</p>}
       <table>
@@ -1870,6 +1875,8 @@ export default function AdminRoster() {
 ```
 
 (Fixed during Task 8 self-review: `reload()` originally let a thrown error from `fetchAllBakers()` become an unhandled rejection with no feedback to the admin — wrapped in try/catch, surfacing the message via the existing `error` state.)
+
+(Additional polish from the Task 8 code quality review: added a `saving` flag disabling the "Add" button while the insert is in flight (`bakers.name` has no unique constraint, so a rapid double-click could otherwise insert two identical rows), trimmed `newName` before insert to avoid an accidental-whitespace near-duplicate baker showing up twice in dropdowns elsewhere, and cleared `error` at the start of `toggleEliminated` so a stale error message from an earlier failed attempt doesn't linger after a later successful one.)
 
 - [ ] **Step 2: Build the admin dashboard (episode list + links)**
 

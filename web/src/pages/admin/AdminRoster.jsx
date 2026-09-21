@@ -6,6 +6,7 @@ export default function AdminRoster() {
   const [bakers, setBakers] = useState([])
   const [newName, setNewName] = useState('')
   const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(false)
 
   async function reload() {
     try {
@@ -22,16 +23,20 @@ export default function AdminRoster() {
   async function handleAdd(e) {
     e.preventDefault()
     setError(null)
-    const { error: insertError } = await supabase.from('bakers').insert({ name: newName })
+    setSaving(true)
+    const { error: insertError } = await supabase.from('bakers').insert({ name: newName.trim() })
     if (insertError) {
       setError(insertError.message)
+      setSaving(false)
       return
     }
     setNewName('')
+    setSaving(false)
     await reload()
   }
 
   async function toggleEliminated(baker) {
+    setError(null)
     const { error: updateError } = await supabase
       .from('bakers')
       .update({ eliminated: !baker.eliminated })
@@ -51,7 +56,7 @@ export default function AdminRoster() {
           Add a baker
           <input value={newName} onChange={(e) => setNewName(e.target.value)} required />
         </label>
-        <button type="submit">Add</button>
+        <button type="submit" disabled={saving}>Add</button>
       </form>
       {error && <p className="error">{error}</p>}
       <table>
