@@ -130,16 +130,18 @@ cat > scripts/package.json << 'EOF'
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
-    "nodemailer": "^6.9.0",
+    "nodemailer": "^10.0.10",
     "dotenv": "^16.4.0"
   },
   "devDependencies": {
-    "vitest": "^2.0.0"
+    "vitest": "^5.0.1"
   }
 }
 EOF
 cd scripts && npm install
 ```
+
+(Versions updated 2026-09-21 during Task 1 implementation: the originally-planned `nodemailer@^6.9.0` had multiple unpatched high/critical CVEs — SMTP command injection, improper TLS validation enabling credential interception, etc. — with no fix in that range. Bumped to `^10.0.10`, which resolves them; `vitest` came along for the ride via `npm audit fix --force`. Both packages' APIs used by this project — `createTransport`/`sendMail`, `describe`/`it`/`expect` — are unchanged across these bumps, so no other task in this plan needs to change.)
 
 - [ ] **Step 6: Add scripts env example**
 
