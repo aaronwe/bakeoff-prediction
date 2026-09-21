@@ -1,0 +1,50 @@
+name: Thursday send and backup
+
+on:
+  schedule:
+    - cron: '0 13 * * 4'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  send-and-backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install script dependencies
+        working-directory: scripts
+        run: npm ci
+
+      - name: Send weekly email
+        working-directory: scripts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: node send-weekly-email.mjs
+
+      - name: Back up scores to CSV
+        working-directory: scripts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: node backup-scores.mjs
+
+      - name: Commit backup CSVs if changed
+        run: |
+          git config user.name "bakeoff-bot"
+          git config user.email "actions@github.com"
+          git add backups/
+          git diff --cached --quiet || git commit -m "Weekly score backup $(date -u +%Y-%m-%d)"
+          git push
