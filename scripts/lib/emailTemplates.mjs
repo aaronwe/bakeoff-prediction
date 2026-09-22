@@ -25,7 +25,7 @@ export function buildWeeklyEmailHtml({ episode, bonusQuestions, siteUrl, previou
     <div>
       <h2>Episode ${episode.number} predictions are open!</h2>
       ${episode.intro_note ? `<p>${escapeHtml(episode.intro_note)}</p>` : ''}
-      <p>This week's questions: technical winner, Star Baker, who goes home, handshake count${bonusQuestions.length ? ', plus bonus questions:' : '.'}</p>
+      <p>This week's questions: technical winner, star baker, eliminated baker, handshake count${bonusQuestions.length ? ', plus bonus questions:' : '.'}</p>
       ${bonusQuestions.length ? `<ul>${bonusList}</ul>` : ''}
       <p><a href="${siteUrl}">Submit your predictions</a></p>
       ${leaderboardSection}
