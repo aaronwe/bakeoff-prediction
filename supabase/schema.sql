@@ -96,6 +96,38 @@ create trigger bonus_questions_correct_answer_guard
   before insert or update on bonus_questions
   for each row execute function enforce_bonus_correct_answer_only_when_scored();
 
+-- ── Deferred / multi-pick bonus questions ───────────────────
+-- Lets a bonus question be a multi-select prediction (e.g. "who makes the
+-- final three?") whose answer key isn't known until long after its own
+-- episode was scored. correct_baker_ids/answer_baker_ids are the
+-- baker_multi_pick equivalents of correct_answer/answer_text; a question's
+-- resolution status is derived (both columns null = ungraded), not stored,
+-- so this same pair of columns works whether the answer is known five
+-- minutes or five months after the episode airs.
+
+alter table bonus_questions drop constraint bonus_questions_type_check;
+alter table bonus_questions add constraint bonus_questions_type_check
+  check (type in ('baker_pick', 'multiple_choice', 'free_text', 'baker_multi_pick'));
+
+alter table bonus_questions add column correct_baker_ids uuid[];
+alter table bonus_answers add column answer_baker_ids uuid[];
+
+-- Extends the existing "only after this question's own episode is scored"
+-- rule (see enforce_bonus_correct_answer_only_when_scored above) to also
+-- cover correct_baker_ids.
+create or replace function enforce_bonus_correct_answer_only_when_scored() returns trigger
+language plpgsql
+as $$
+begin
+  if new.correct_answer is not null or new.correct_baker_ids is not null then
+    if not exists (select 1 from episodes e where e.id = new.episode_id and e.status = 'scored') then
+      raise exception 'correct_answer can only be set once the episode is scored';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
 create table answers (
   id uuid primary key default gen_random_uuid(),
   episode_id uuid not null references episodes(id) on delete cascade,
