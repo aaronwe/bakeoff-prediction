@@ -96,6 +96,26 @@ create trigger bonus_questions_correct_answer_guard
   before insert or update on bonus_questions
   for each row execute function enforce_bonus_correct_answer_only_when_scored();
 
+create table answers (
+  id uuid primary key default gen_random_uuid(),
+  episode_id uuid not null references episodes(id) on delete cascade,
+  player_id uuid not null references players(id) on delete cascade,
+  technical_pick_id uuid references bakers(id),
+  star_baker_pick_id uuid references bakers(id),
+  eliminated_pick_id uuid references bakers(id),
+  handshake_guess integer,
+  submitted_at timestamptz not null default now(),
+  unique (episode_id, player_id)
+);
+
+create table bonus_answers (
+  id uuid primary key default gen_random_uuid(),
+  bonus_question_id uuid not null references bonus_questions(id) on delete cascade,
+  player_id uuid not null references players(id) on delete cascade,
+  answer_text text,
+  unique (bonus_question_id, player_id)
+);
+
 -- ── Deferred / multi-pick bonus questions ───────────────────
 -- Lets a bonus question be a multi-select prediction (e.g. "who makes the
 -- final three?") whose answer key isn't known until long after its own
@@ -127,26 +147,6 @@ begin
   return new;
 end;
 $$;
-
-create table answers (
-  id uuid primary key default gen_random_uuid(),
-  episode_id uuid not null references episodes(id) on delete cascade,
-  player_id uuid not null references players(id) on delete cascade,
-  technical_pick_id uuid references bakers(id),
-  star_baker_pick_id uuid references bakers(id),
-  eliminated_pick_id uuid references bakers(id),
-  handshake_guess integer,
-  submitted_at timestamptz not null default now(),
-  unique (episode_id, player_id)
-);
-
-create table bonus_answers (
-  id uuid primary key default gen_random_uuid(),
-  bonus_question_id uuid not null references bonus_questions(id) on delete cascade,
-  player_id uuid not null references players(id) on delete cascade,
-  answer_text text,
-  unique (bonus_question_id, player_id)
-);
 
 create table scores (
   id uuid primary key default gen_random_uuid(),
