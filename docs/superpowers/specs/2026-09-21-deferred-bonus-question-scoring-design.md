@@ -176,11 +176,17 @@ its answer is knowable.
 Each row shows the episode number, the prompt, and an input matched to the
 question's type:
 
-- `free_text` / `multiple_choice`: a text input (same as `AnswerKeyAndScore`
-  used to render).
-- `baker_pick`: a single-select `BakerPicker` over `allBakers`.
+- `free_text` / `multiple_choice` / `baker_pick`: a plain text input,
+  identical to the one `AnswerKeyAndScore` used to render. `baker_pick`
+  questions store the baker's *name* as a plain string in `answer_text`/
+  `correct_answer` (see `WeeklyForm.jsx`'s `bonusOptionsFor`, which options
+  its `<select>` by `b.name`) — they don't use baker ids at all today, so
+  their resolution input stays a free-text match rather than a
+  `BakerPicker`, to avoid writing an id where a name is expected.
 - `baker_multi_pick`: a multi-select `BakerPicker` over `allBakers`, capped
-  at `options.pick_count`.
+  at `options.pick_count`. Unlike `baker_pick`, this is a new answer format
+  with no legacy string-matching to stay compatible with, so it uses real
+  baker ids (`correct_baker_ids`/`answer_baker_ids`) from the start.
 
 Clicking "Score" for a row:
 
