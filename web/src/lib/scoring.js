@@ -6,7 +6,16 @@ export function scoreHandshake(guess, actual) {
   return 0
 }
 
-export function scoreBonusAnswer(bonusQuestion, answerText) {
+export function scoreBonusAnswer(bonusQuestion, bonusAnswer) {
+  if (bonusQuestion.type === 'baker_multi_pick') {
+    const picks = bonusAnswer?.answer_baker_ids
+    const correct = bonusQuestion.correct_baker_ids
+    if (!picks?.length || !correct?.length) return 0
+    const correctSet = new Set(correct)
+    const matches = picks.filter((id) => correctSet.has(id)).length
+    return matches * bonusQuestion.points
+  }
+  const answerText = bonusAnswer?.answer_text
   if (!answerText || !bonusQuestion.correct_answer) return 0
   const normalize = (s) => s.trim().toLowerCase()
   return normalize(answerText) === normalize(bonusQuestion.correct_answer)
@@ -32,7 +41,7 @@ export function computeScoreForPlayer({ episode, answer, bonusQuestions, bonusAn
 
   for (const bq of bonusQuestions) {
     const ba = bonusAnswers.find((a) => a.bonus_question_id === bq.id)
-    breakdown[`bonus_${bq.id}`] = scoreBonusAnswer(bq, ba?.answer_text)
+    breakdown[`bonus_${bq.id}`] = scoreBonusAnswer(bq, ba)
   }
 
   const total = Object.values(breakdown).reduce((sum, v) => sum + v, 0)
