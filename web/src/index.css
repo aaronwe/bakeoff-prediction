@@ -272,7 +272,8 @@ button:disabled {
   background: var(--color-surface-alt);
 }
 
-.baker-option input[type="radio"] {
+.baker-option input[type="radio"],
+.baker-option input[type="checkbox"] {
   position: absolute;
   width: 1px;
   height: 1px;

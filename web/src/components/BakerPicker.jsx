@@ -34,7 +34,43 @@ function BakerThumb({ baker }) {
   )
 }
 
-export default function BakerPicker({ groupName, label, bakers, value, onChange }) {
+export default function BakerPicker({ groupName, label, bakers, value, onChange, multiple = false, maxPicks }) {
+  if (multiple) {
+    const selected = value ?? []
+    function toggle(bakerId) {
+      if (selected.includes(bakerId)) {
+        onChange(selected.filter((id) => id !== bakerId))
+        return
+      }
+      if (selected.length >= maxPicks) return
+      onChange([...selected, bakerId])
+    }
+    return (
+      <fieldset className="baker-picker">
+        <legend>{label}</legend>
+        <div className="baker-picker-options">
+          {bakers.map((b) => {
+            const checked = selected.includes(b.id)
+            const disabled = !checked && selected.length >= maxPicks
+            return (
+              <label key={b.id} className={`baker-option${checked ? ' selected' : ''}`}>
+                <input
+                  type="checkbox"
+                  name={groupName}
+                  checked={checked}
+                  disabled={disabled}
+                  onChange={() => toggle(b.id)}
+                />
+                <BakerThumb baker={b} />
+                <span className="baker-name">{b.name}</span>
+              </label>
+            )
+          })}
+        </div>
+      </fieldset>
+    )
+  }
+
   return (
     <fieldset className="baker-picker">
       <legend>{label}</legend>
