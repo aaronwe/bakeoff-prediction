@@ -5,5 +5,6 @@ export const CREATE_EPISODE = 'Create new episode'
 export const GRADE_BONUS_QUESTIONS = 'Grade bonus questions'
 export const LOAD_ERROR_PREFIX = "Couldn't load episodes: "
 export const EPISODE = 'Episode'
+export const EPISODE_TITLE_COLUMN = 'Title'
 export const STATUS = 'Status'
 export const MANAGE = 'Manage'

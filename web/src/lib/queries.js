@@ -113,7 +113,7 @@ export async function fetchLeaderboardData() {
 export async function fetchUnresolvedBonusQuestions() {
   const { data, error } = await supabase
     .from('bonus_questions')
-    .select('*, episodes!inner(number, status)')
+    .select('*, episodes!inner(number, status, title)')
     .eq('episodes.status', 'scored')
     .is('correct_answer', null)
     .is('correct_baker_ids', null)
@@ -129,7 +129,7 @@ export async function fetchUnresolvedBonusQuestions() {
 export async function fetchGradedBonusQuestions() {
   const { data, error } = await supabase
     .from('bonus_questions')
-    .select('*, episodes!inner(number, status)')
+    .select('*, episodes!inner(number, status, title)')
     .eq('episodes.status', 'scored')
     .or('correct_answer.not.is.null,correct_baker_ids.not.is.null')
     .order('created_at')

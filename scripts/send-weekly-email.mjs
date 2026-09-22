@@ -3,6 +3,7 @@ import { supabaseAdmin } from './lib/supabaseAdmin.mjs'
 import { sendMail } from './lib/mailer.mjs'
 import { buildWeeklyEmailHtml, buildAdminReminderHtml } from './lib/emailTemplates.mjs'
 import { decideWeeklyAction } from './lib/weeklyEmailDecision.mjs'
+import { episodeLabel } from './lib/episodeLabel.mjs'
 
 async function getAdminEmails() {
   const { data, error } = await supabaseAdmin.from('admins').select('email')
@@ -34,7 +35,7 @@ async function main() {
     const adminEmails = await getAdminEmails()
     const html = buildAdminReminderHtml({ episode, kind: 'not-locked' })
     for (const email of adminEmails) {
-      await sendMail({ to: email, subject: `Episode ${episode.number} email isn't locked yet`, html, text: html.replace(/<[^>]+>/g, '') })
+      await sendMail({ to: email, subject: `${episodeLabel(episode)} email isn't locked yet`, html, text: html.replace(/<[^>]+>/g, '') })
     }
     console.log(`Sent lock reminder to ${adminEmails.length} admin(s).`)
     return
@@ -79,7 +80,7 @@ async function main() {
   const text = html.replace(/<[^>]+>/g, '')
 
   for (const player of players ?? []) {
-    await sendMail({ to: player.email, subject: `Bake Off Pool: Episode ${episode.number} predictions are open`, html, text })
+    await sendMail({ to: player.email, subject: `Bake Off Pool: ${episodeLabel(episode)} predictions are open`, html, text })
   }
 
   const { error: updateError } = await supabaseAdmin

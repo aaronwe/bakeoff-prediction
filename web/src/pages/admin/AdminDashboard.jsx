@@ -54,6 +54,7 @@ export default function AdminDashboard() {
           <thead>
             <tr>
               <th>{copy.EPISODE}</th>
+              <th>{copy.EPISODE_TITLE_COLUMN}</th>
               <th>{copy.STATUS}</th>
               <th></th>
             </tr>
@@ -62,6 +63,7 @@ export default function AdminDashboard() {
             {episodes.map((ep) => (
               <tr key={ep.id}>
                 <td>{ep.number}</td>
+                <td>{ep.title || '—'}</td>
                 <td><span className={statusBadgeClass(ep.status)}>{ep.status}</span></td>
                 <td>
                   <Link to={`/admin/episodes/${ep.number}`}>{copy.MANAGE}</Link>

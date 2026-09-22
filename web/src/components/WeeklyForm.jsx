@@ -135,7 +135,7 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
 
   return (
     <form className="card" onSubmit={handleSubmit}>
-      <h2>{copy.episodeTitle(episode.number)}</h2>
+      <h2>{copy.episodeTitle(episode)}</h2>
       {episode.intro_note && <p className="muted">{episode.intro_note}</p>}
 
       <BakerPicker

@@ -34,12 +34,12 @@ export default function EpisodeReveal() {
   const { episode, bakers, players, answers, bonusQuestions, bonusAnswers, scores } = data
 
   if (episode.status !== 'scored') {
-    return <p>{copy.notScoredYet(episode.number)}</p>
+    return <p>{copy.notScoredYet(episode)}</p>
   }
 
   return (
     <div>
-      <h2>{copy.resultsTitle(episode.number)}</h2>
+      <h2>{copy.resultsTitle(episode)}</h2>
       <p>
         {copy.summaryLine({
           technicalWinner: bakerName(bakers, episode.technical_winner_baker_id),

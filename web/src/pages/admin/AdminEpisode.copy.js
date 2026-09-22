@@ -1,3 +1,5 @@
+import { episodeLabel } from '../../lib/episodeLabel'
+
 // NewBonusQuestionForm
 export const ADD_BONUS_QUESTION_TITLE = 'Add a bonus question'
 export const PROMPT_LABEL = 'Prompt'
@@ -60,5 +62,9 @@ export const confirmDeleteEpisode = (number) =>
 export const DELETE_HAD_NO_EFFECT =
   "Nothing was deleted — you may not have permission, or this episode was already removed."
 export const BONUS_QUESTIONS_TITLE = 'Bonus questions'
-export const episodeHeading = (number) => `Episode ${number}`
+export const episodeHeading = (episode) => episodeLabel(episode)
+
+// EpisodeTitleEditor
+export const TITLE_LABEL = 'Title (optional)'
+export const SAVE_TITLE = 'Save title'
 export const bonusQuestionLine = (bq) => `${bq.prompt} — ${bq.type} — ${bq.points} pt${bq.points === 1 ? '' : 's'}`

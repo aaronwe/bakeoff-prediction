@@ -1,4 +1,5 @@
 import { formatPoints, QUESTION_KIND } from '../lib/pointsDisplay'
+import { episodeLabel } from '../lib/episodeLabel'
 
 export const LOADING_QUESTIONS = "Loading this week's questions…"
 export const LOAD_ERROR_PREFIX = "Couldn't load this week's questions: "
@@ -14,6 +15,6 @@ export const SAVING = 'Saving…'
 export const SUBMIT = 'Submit answers'
 export const SAVED = 'Saved! You can come back and change your answers until scoring.'
 
-export const episodeTitle = (number) => `Episode ${number}`
+export const episodeTitle = (episode) => episodeLabel(episode)
 export const bonusPoints = (type, points) =>
   `(${formatPoints(type === 'baker_multi_pick' ? QUESTION_KIND.PER_CORRECT : QUESTION_KIND.FLAT, points)})`

@@ -324,3 +324,9 @@ alter table bakers
 -- the new admin "delete player" feature. answers/bonus_answers/scores rows
 -- for that player already cascade via their own `on delete cascade` FKs.
 create policy players_delete on players for delete using (is_admin());
+
+-- ── Episode titles ───────────────────────────────────────────
+-- Optional human-readable title (e.g. "Bread Week") alongside the existing
+-- `number`. Nullable: existing/untitled episodes fall back to "Episode N" in
+-- the UI rather than requiring a backfill.
+alter table episodes add column title text;

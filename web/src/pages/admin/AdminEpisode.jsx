@@ -138,6 +138,43 @@ async function loadEpisodeData(episodeNumber) {
   }
 }
 
+function EpisodeTitleEditor({ episode, onChanged }) {
+  const [title, setTitle] = useState(episode.title ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    setTitle(episode.title ?? '')
+  }, [episode.id, episode.title])
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setSaving(true)
+    setError(null)
+    const { error: updateError } = await supabase
+      .from('episodes')
+      .update({ title: title.trim() || null })
+      .eq('id', episode.id)
+    setSaving(false)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+    onChanged()
+  }
+
+  return (
+    <form className="card" onSubmit={handleSave}>
+      <label>
+        {copy.TITLE_LABEL}
+        <input value={title} onChange={(e) => setTitle(e.target.value)} />
+      </label>
+      <button type="submit" disabled={saving}>{copy.SAVE_TITLE}</button>
+      {error && <p className="error">{error}</p>}
+    </form>
+  )
+}
+
 function IntroNoteAndLock({ episode, onChanged }) {
   const [introNote, setIntroNote] = useState(episode.intro_note ?? '')
   const [error, setError] = useState(null)
@@ -560,14 +597,18 @@ export default function AdminEpisode() {
   return (
     <div>
       <h2>
-        {copy.episodeHeading(episode.number)}{' '}
+        {copy.episodeHeading(episode)}{' '}
         <span className={statusBadgeClass(episode.status)}>{episode.status}</span>
       </h2>
       {error && <p className="error">{error}</p>}
 
       {episode.status === 'draft' && (
-        <button onClick={handlePublish} disabled={publishing}>{copy.PUBLISH}</button>
+        <p>
+          <button onClick={handlePublish} disabled={publishing}>{copy.PUBLISH}</button>
+        </p>
       )}
+
+      <EpisodeTitleEditor episode={episode} onChanged={reload} />
 
       <h3>{copy.BONUS_QUESTIONS_TITLE}</h3>
       <ul>
