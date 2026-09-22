@@ -26,6 +26,7 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
   const [eliminatedPick, setEliminatedPick] = useState('')
   const [handshakeGuess, setHandshakeGuess] = useState('')
   const [bonusAnswerText, setBonusAnswerText] = useState({})
+  const [bonusAnswerBakerIds, setBonusAnswerBakerIds] = useState({})
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [retryCount, setRetryCount] = useState(0)
@@ -50,9 +51,14 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
           setEliminatedPick(existingAnswer.eliminated_pick_id ?? '')
           setHandshakeGuess(existingAnswer.handshake_guess ?? '')
         }
-        const bonusMap = {}
-        for (const ba of existingBonus) bonusMap[ba.bonus_question_id] = ba.answer_text
-        setBonusAnswerText(bonusMap)
+        const bonusTextMap = {}
+        const bonusBakerIdsMap = {}
+        for (const ba of existingBonus) {
+          bonusTextMap[ba.bonus_question_id] = ba.answer_text
+          bonusBakerIdsMap[ba.bonus_question_id] = ba.answer_baker_ids ?? []
+        }
+        setBonusAnswerText(bonusTextMap)
+        setBonusAnswerBakerIds(bonusBakerIdsMap)
       } catch (err) {
         if (!cancelled) setLoadError(err.message)
       } finally {
@@ -93,9 +99,16 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
     // would silently keep a previously-saved answer in place while the UI
     // told the player their (cleared) answer was saved.
     for (const bq of bonusQuestions) {
+      const isMultiPick = bq.type === 'baker_multi_pick'
       const text = bonusAnswerText[bq.id] ?? ''
+      const ids = bonusAnswerBakerIds[bq.id] ?? []
       const { error: bonusError } = await supabase.from('bonus_answers').upsert(
-        { bonus_question_id: bq.id, player_id: player.id, answer_text: text || null },
+        {
+          bonus_question_id: bq.id,
+          player_id: player.id,
+          answer_text: isMultiPick ? null : text || null,
+          answer_baker_ids: isMultiPick && ids.length ? ids : null,
+        },
         { onConflict: 'bonus_question_id,player_id' },
       )
       if (bonusError) {
@@ -160,6 +173,21 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
       </label>
 
       {bonusQuestions.map((bq) => {
+        if (bq.type === 'baker_multi_pick') {
+          const pool = bq.include_eliminated ? allBakers : activeBakers
+          return (
+            <BakerPicker
+              key={bq.id}
+              groupName={`bonus-${bq.id}`}
+              label={`${bq.prompt} ${copy.bonusPoints(bq.points)}`}
+              bakers={pool}
+              multiple
+              maxPicks={bq.options?.pick_count ?? pool.length}
+              value={bonusAnswerBakerIds[bq.id] ?? []}
+              onChange={(ids) => setBonusAnswerBakerIds((prev) => ({ ...prev, [bq.id]: ids }))}
+            />
+          )
+        }
         const options = bonusOptionsFor(bq, allBakers, activeBakers)
         return (
           <label key={bq.id}>
