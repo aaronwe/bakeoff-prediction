@@ -78,6 +78,14 @@ export default function EpisodeReveal() {
                   <td>{answer.handshake_guess ?? copy.NO_ANSWER}</td>
                   {bonusQuestions.map((bq) => {
                     const ba = bonusAnswers.find((a) => a.bonus_question_id === bq.id && a.player_id === p.id)
+                    if (bq.type === 'baker_multi_pick') {
+                      const ids = ba?.answer_baker_ids ?? []
+                      return (
+                        <td key={bq.id}>
+                          {ids.length ? ids.map((id) => bakerName(bakers, id)).join(', ') : copy.NO_ANSWER}
+                        </td>
+                      )
+                    }
                     return <td key={bq.id}>{ba?.answer_text ?? copy.NO_ANSWER}</td>
                   })}
                   <td>{score ? score.total : copy.NO_ANSWER}</td>
