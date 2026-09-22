@@ -103,3 +103,15 @@ export async function fetchLeaderboardData() {
   if (episodesError) throw episodesError
   return { players, scores, episodes }
 }
+
+export async function fetchUnresolvedBonusQuestions() {
+  const { data, error } = await supabase
+    .from('bonus_questions')
+    .select('*, episodes!inner(number, status)')
+    .eq('episodes.status', 'scored')
+    .is('correct_answer', null)
+    .is('correct_baker_ids', null)
+    .order('created_at')
+  if (error) throw error
+  return data
+}
