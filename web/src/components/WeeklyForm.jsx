@@ -179,7 +179,7 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
             <BakerPicker
               key={bq.id}
               groupName={`bonus-${bq.id}`}
-              label={`${bq.prompt} ${copy.bonusPoints(bq.points)}`}
+              label={`${bq.prompt} ${copy.bonusPoints(bq.type, bq.points)}`}
               bakers={pool}
               multiple
               maxPicks={bq.options?.pick_count ?? pool.length}
@@ -191,7 +191,7 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
         const options = bonusOptionsFor(bq, allBakers, activeBakers)
         return (
           <label key={bq.id}>
-            {bq.prompt} {copy.bonusPoints(bq.points)}
+            {bq.prompt} {copy.bonusPoints(bq.type, bq.points)}
             {options ? (
               <select
                 value={bonusAnswerText[bq.id] ?? ''}

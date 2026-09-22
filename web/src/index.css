@@ -225,6 +225,30 @@ button:disabled {
   background: var(--color-surface-alt);
 }
 
+.intro-note-label {
+  display: block;
+  margin-bottom: var(--space-3);
+  font-weight: 500;
+}
+
+.intro-note-label textarea {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  resize: vertical;
+}
+
+.intro-note-label textarea:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
 .baker-picker {
   border: none;
   padding: 0;

@@ -203,9 +203,9 @@ function IntroNoteAndLock({ episode, onChanged }) {
   return (
     <div className="card">
       <h3>{copy.WEEKLY_EMAIL_TITLE}</h3>
-      <label>
+      <label className="intro-note-label">
         {copy.INTRO_NOTE_LABEL}
-        <textarea rows="4" value={introNote} onChange={(e) => setIntroNote(e.target.value)} />
+        <textarea rows="8" value={introNote} onChange={(e) => setIntroNote(e.target.value)} />
       </label>
       <button onClick={handleSaveNote} disabled={saving}>{copy.SAVE_NOTE}</button>{' '}
       {episode.email_locked_at ? (
