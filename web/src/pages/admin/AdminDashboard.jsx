@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
+import * as copy from './AdminDashboard.copy'
+
+function statusBadgeClass(status) {
+  if (status === 'open') return 'badge badge-open'
+  if (status === 'scored') return 'badge badge-scored'
+  return 'badge'
+}
 
 export default function AdminDashboard() {
   const [episodes, setEpisodes] = useState([])
@@ -28,34 +35,36 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <h2>Admin</h2>
+      <h2>{copy.TITLE}</h2>
       <p>
-        <Link to="/admin/roster">Manage baker roster</Link>
+        <Link to="/admin/roster">{copy.MANAGE_ROSTER}</Link>
       </p>
       <p>
-        <Link to="/admin/episodes/new">Create new episode</Link>
+        <Link to="/admin/episodes/new">{copy.CREATE_EPISODE}</Link>
       </p>
-      {error && <p className="error">Couldn't load episodes: {error}</p>}
-      <table>
-        <thead>
-          <tr>
-            <th>Episode</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {episodes.map((ep) => (
-            <tr key={ep.id}>
-              <td>{ep.number}</td>
-              <td>{ep.status}</td>
-              <td>
-                <Link to={`/admin/episodes/${ep.number}`}>Manage</Link>
-              </td>
+      {error && <p className="error">{copy.LOAD_ERROR_PREFIX}{error}</p>}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{copy.EPISODE}</th>
+              <th>{copy.STATUS}</th>
+              <th></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {episodes.map((ep) => (
+              <tr key={ep.id}>
+                <td>{ep.number}</td>
+                <td><span className={statusBadgeClass(ep.status)}>{ep.status}</span></td>
+                <td>
+                  <Link to={`/admin/episodes/${ep.number}`}>{copy.MANAGE}</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

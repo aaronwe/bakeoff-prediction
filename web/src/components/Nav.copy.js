@@ -1,0 +1,5 @@
+export const SITE_TITLE = 'The Great Bake-Off Prediction Game'
+export const HOME = 'Home'
+export const LEADERBOARD = 'Leaderboard'
+export const ADMIN = 'Admin'
+export const SIGN_OUT = 'Sign out'

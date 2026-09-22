@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { fetchAllBakers } from '../../lib/queries'
+import * as copy from './AdminRoster.copy'
 
 export default function AdminRoster() {
   const [bakers, setBakers] = useState([])
@@ -50,37 +51,43 @@ export default function AdminRoster() {
 
   return (
     <div>
-      <h2>Baker roster</h2>
-      <form onSubmit={handleAdd}>
+      <h2>{copy.TITLE}</h2>
+      <form className="card" onSubmit={handleAdd}>
         <label>
-          Add a baker
+          {copy.ADD_A_BAKER}
           <input value={newName} onChange={(e) => setNewName(e.target.value)} required />
         </label>
-        <button type="submit" disabled={saving}>Add</button>
+        <button type="submit" disabled={saving}>{copy.ADD}</button>
       </form>
       {error && <p className="error">{error}</p>}
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {bakers.map((b) => (
-            <tr key={b.id}>
-              <td>{b.name}</td>
-              <td>{b.eliminated ? 'Eliminated' : 'In the tent'}</td>
-              <td>
-                <button onClick={() => toggleEliminated(b)}>
-                  {b.eliminated ? 'Mark still in' : 'Mark eliminated'}
-                </button>
-              </td>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{copy.NAME}</th>
+              <th>{copy.STATUS}</th>
+              <th></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {bakers.map((b) => (
+              <tr key={b.id}>
+                <td>{b.name}</td>
+                <td>
+                  <span className={b.eliminated ? 'badge' : 'badge badge-open'}>
+                    {b.eliminated ? copy.ELIMINATED : copy.IN_THE_TENT}
+                  </span>
+                </td>
+                <td>
+                  <button className="button-ghost" onClick={() => toggleEliminated(b)}>
+                    {b.eliminated ? copy.MARK_STILL_IN : copy.MARK_ELIMINATED}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

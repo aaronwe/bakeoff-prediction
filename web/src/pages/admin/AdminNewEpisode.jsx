@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
+import * as copy from './AdminNewEpisode.copy'
 
 export default function AdminNewEpisode() {
   const [number, setNumber] = useState('')
@@ -25,17 +26,17 @@ export default function AdminNewEpisode() {
 
   return (
     <div>
-      <h2>New episode</h2>
-      <form onSubmit={handleSubmit}>
+      <h2>{copy.TITLE}</h2>
+      <form className="card" onSubmit={handleSubmit}>
         <label>
-          Episode number
+          {copy.EPISODE_NUMBER_LABEL}
           <input type="number" min="1" required value={number} onChange={(e) => setNumber(e.target.value)} />
         </label>
         <label>
-          Air date (optional)
+          {copy.AIR_DATE_LABEL}
           <input type="date" value={airDate} onChange={(e) => setAirDate(e.target.value)} />
         </label>
-        <button type="submit">Create</button>
+        <button type="submit">{copy.CREATE}</button>
       </form>
       {error && <p className="error">{error}</p>}
     </div>

@@ -5,6 +5,8 @@ import {
   fetchMyAnswer,
   fetchMyBonusAnswers,
 } from '../lib/queries'
+import BakerPicker from './BakerPicker'
+import * as copy from './WeeklyForm.copy'
 
 function bonusOptionsFor(question, allBakers, activeBakers) {
   if (question.type === 'baker_pick') {
@@ -107,54 +109,48 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
     setSaved(true)
   }
 
-  if (loading) return <p>Loading this week's questions…</p>
+  if (loading) return <p>{copy.LOADING_QUESTIONS}</p>
 
   if (loadError) {
     return (
       <div>
-        <p className="error">Couldn't load this week's questions: {loadError}</p>
-        <button onClick={() => setRetryCount((n) => n + 1)}>Try again</button>
+        <p className="error">{copy.LOAD_ERROR_PREFIX}{loadError}</p>
+        <button onClick={() => setRetryCount((n) => n + 1)}>{copy.TRY_AGAIN}</button>
       </div>
     )
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h2>Episode {episode.number}</h2>
-      {episode.intro_note && <p>{episode.intro_note}</p>}
+    <form className="card" onSubmit={handleSubmit}>
+      <h2>{copy.episodeTitle(episode.number)}</h2>
+      {episode.intro_note && <p className="muted">{episode.intro_note}</p>}
+
+      <BakerPicker
+        groupName="technical-pick"
+        label={copy.TECHNICAL_LABEL}
+        bakers={activeBakers}
+        value={technicalPick}
+        onChange={setTechnicalPick}
+      />
+
+      <BakerPicker
+        groupName="star-baker-pick"
+        label={copy.STAR_BAKER_LABEL}
+        bakers={activeBakers}
+        value={starBakerPick}
+        onChange={setStarBakerPick}
+      />
+
+      <BakerPicker
+        groupName="eliminated-pick"
+        label={copy.ELIMINATED_LABEL}
+        bakers={activeBakers}
+        value={eliminatedPick}
+        onChange={setEliminatedPick}
+      />
 
       <label>
-        Technical challenge winner
-        <select value={technicalPick} onChange={(e) => setTechnicalPick(e.target.value)}>
-          <option value="">Select a baker</option>
-          {activeBakers.map((b) => (
-            <option key={b.id} value={b.id}>{b.name}</option>
-          ))}
-        </select>
-      </label>
-
-      <label>
-        Star Baker
-        <select value={starBakerPick} onChange={(e) => setStarBakerPick(e.target.value)}>
-          <option value="">Select a baker</option>
-          {activeBakers.map((b) => (
-            <option key={b.id} value={b.id}>{b.name}</option>
-          ))}
-        </select>
-      </label>
-
-      <label>
-        Who goes home
-        <select value={eliminatedPick} onChange={(e) => setEliminatedPick(e.target.value)}>
-          <option value="">Select a baker</option>
-          {activeBakers.map((b) => (
-            <option key={b.id} value={b.id}>{b.name}</option>
-          ))}
-        </select>
-      </label>
-
-      <label>
-        Paul Hollywood handshakes
+        {copy.HANDSHAKE_LABEL}
         <input
           type="number"
           min="0"
@@ -167,13 +163,13 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
         const options = bonusOptionsFor(bq, allBakers, activeBakers)
         return (
           <label key={bq.id}>
-            {bq.prompt} ({bq.points} pt{bq.points === 1 ? '' : 's'})
+            {bq.prompt} {copy.bonusPoints(bq.points)}
             {options ? (
               <select
                 value={bonusAnswerText[bq.id] ?? ''}
                 onChange={(e) => setBonusAnswerText((prev) => ({ ...prev, [bq.id]: e.target.value }))}
               >
-                <option value="">Select an option</option>
+                <option value="">{copy.SELECT_AN_OPTION}</option>
                 {options.map((opt) => (
                   <option key={opt} value={opt}>{opt}</option>
                 ))}
@@ -190,9 +186,9 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
       })}
 
       <button type="submit" disabled={saving}>
-        {saving ? 'Saving…' : 'Submit answers'}
+        {saving ? copy.SAVING : copy.SUBMIT}
       </button>
-      {saved && <p>Saved! You can come back and change your answers until scoring.</p>}
+      {saved && <p>{copy.SAVED}</p>}
       {error && <p className="error">{error}</p>}
     </form>
   )

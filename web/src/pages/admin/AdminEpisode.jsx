@@ -3,6 +3,14 @@ import { useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { fetchAllBakers, fetchActiveBakers, fetchBonusQuestions } from '../../lib/queries'
 import { computeScoreForPlayer } from '../../lib/scoring'
+import BakerPicker from '../../components/BakerPicker'
+import * as copy from './AdminEpisode.copy'
+
+function statusBadgeClass(status) {
+  if (status === 'open') return 'badge badge-open'
+  if (status === 'scored') return 'badge badge-scored'
+  return 'badge'
+}
 
 function NewBonusQuestionForm({ episodeId, onAdded }) {
   const [prompt, setPrompt] = useState('')
@@ -34,18 +42,18 @@ function NewBonusQuestionForm({ episodeId, onAdded }) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h4>Add a bonus question</h4>
+    <form className="card" onSubmit={handleSubmit}>
+      <h4>{copy.ADD_BONUS_QUESTION_TITLE}</h4>
       <label>
-        Prompt
+        {copy.PROMPT_LABEL}
         <input required value={prompt} onChange={(e) => setPrompt(e.target.value)} />
       </label>
       <label>
-        Type
+        {copy.TYPE_LABEL}
         <select value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="baker_pick">Pick a baker</option>
-          <option value="multiple_choice">Multiple choice (custom options)</option>
-          <option value="free_text">Free text / number</option>
+          <option value="baker_pick">{copy.TYPE_BAKER_PICK}</option>
+          <option value="multiple_choice">{copy.TYPE_MULTIPLE_CHOICE}</option>
+          <option value="free_text">{copy.TYPE_FREE_TEXT}</option>
         </select>
       </label>
       {type === 'baker_pick' && (
@@ -55,20 +63,20 @@ function NewBonusQuestionForm({ episodeId, onAdded }) {
             checked={includeEliminated}
             onChange={(e) => setIncludeEliminated(e.target.checked)}
           />
-          Include eliminated bakers
+          {copy.INCLUDE_ELIMINATED_LABEL}
         </label>
       )}
       {type === 'multiple_choice' && (
         <label>
-          Options (comma-separated)
+          {copy.OPTIONS_LABEL}
           <input value={options} onChange={(e) => setOptions(e.target.value)} />
         </label>
       )}
       <label>
-        Points
+        {copy.POINTS_LABEL}
         <input type="number" min="1" value={points} onChange={(e) => setPoints(e.target.value)} />
       </label>
-      <button type="submit">Add bonus question</button>
+      <button type="submit">{copy.ADD_BONUS_QUESTION}</button>
       {error && <p className="error">{error}</p>}
     </form>
   )
@@ -145,7 +153,7 @@ function IntroNoteAndLock({ episode, onChanged }) {
   async function handleLock() {
     setError(null)
     if (!introNote.trim()) {
-      setError('Write an intro note before locking.')
+      setError(copy.LOCK_ERROR)
       return
     }
     setSaving(true)
@@ -177,30 +185,30 @@ function IntroNoteAndLock({ episode, onChanged }) {
   }
 
   return (
-    <div>
-      <h3>Weekly email</h3>
+    <div className="card">
+      <h3>{copy.WEEKLY_EMAIL_TITLE}</h3>
       <label>
-        Intro note (shown at the top of Thursday's email)
+        {copy.INTRO_NOTE_LABEL}
         <textarea rows="4" value={introNote} onChange={(e) => setIntroNote(e.target.value)} />
       </label>
-      <button onClick={handleSaveNote} disabled={saving}>Save note</button>{' '}
+      <button onClick={handleSaveNote} disabled={saving}>{copy.SAVE_NOTE}</button>{' '}
       {episode.email_locked_at ? (
         <>
-          <span> Locked and ready to send.</span>{' '}
-          <button onClick={handleUnlock} disabled={saving}>Unlock</button>
+          <span> {copy.LOCKED_MESSAGE}</span>{' '}
+          <button className="button-ghost" onClick={handleUnlock} disabled={saving}>{copy.UNLOCK}</button>
           {' '}
           <a
             href={`https://github.com/${import.meta.env.VITE_GITHUB_REPO}/actions/workflows/thursday-send.yml`}
             target="_blank"
             rel="noreferrer"
           >
-            Send now (opens GitHub Actions — click "Run workflow")
+            {copy.SEND_NOW}
           </a>
         </>
       ) : (
-        <button onClick={handleLock} disabled={saving}>Lock &amp; ready to send</button>
+        <button onClick={handleLock} disabled={saving}>{copy.LOCK_AND_READY}</button>
       )}
-      {episode.email_sent_at && <p>Email sent at {new Date(episode.email_sent_at).toLocaleString()}.</p>}
+      {episode.email_sent_at && <p className="muted">{copy.emailSentAt(new Date(episode.email_sent_at).toLocaleString())}</p>}
       {error && <p className="error">{error}</p>}
     </div>
   )
@@ -330,54 +338,51 @@ function AnswerKeyAndScore({ episode, bonusQuestions, allBakers, onChanged }) {
       recomputed += 1
     }
 
-    setSummary(`${recomputed} player score(s) recomputed, ${preserved} manual override(s) preserved.`)
+    setSummary(copy.scoreSummary(recomputed, preserved))
     setScoring(false)
     onChanged()
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h3>Answer key &amp; scoring</h3>
+    <form className="card" onSubmit={handleSubmit}>
+      <h3>{copy.ANSWER_KEY_TITLE}</h3>
+      <BakerPicker
+        groupName="answer-key-technical"
+        label={copy.TECHNICAL_LABEL}
+        bakers={allBakers}
+        value={technicalWinner}
+        onChange={setTechnicalWinner}
+      />
+      <BakerPicker
+        groupName="answer-key-star-baker"
+        label={copy.STAR_BAKER_LABEL}
+        bakers={allBakers}
+        value={starBaker}
+        onChange={setStarBaker}
+      />
+      <BakerPicker
+        groupName="answer-key-eliminated"
+        label={copy.ELIMINATED_LABEL}
+        bakers={allBakers}
+        value={eliminated}
+        onChange={setEliminated}
+      />
       <label>
-        Technical challenge winner
-        <select value={technicalWinner} onChange={(e) => setTechnicalWinner(e.target.value)}>
-          <option value="">Select a baker</option>
-          {allBakers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-      </label>
-      <label>
-        Star Baker
-        <select value={starBaker} onChange={(e) => setStarBaker(e.target.value)}>
-          <option value="">Select a baker</option>
-          {allBakers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-      </label>
-      <label>
-        Who went home
-        <select value={eliminated} onChange={(e) => setEliminated(e.target.value)}>
-          <option value="">Select a baker</option>
-          {allBakers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-      </label>
-      <label>
-        Handshake count
+        {copy.HANDSHAKE_COUNT_LABEL}
         <input type="number" min="0" value={handshakeCount} onChange={(e) => setHandshakeCount(e.target.value)} />
       </label>
       {bonusQuestions.map((bq) => (
         <label key={bq.id}>
-          Correct answer: {bq.prompt}
+          {copy.correctAnswerLabel(bq.prompt)}
           <input
             value={bonusCorrect[bq.id] ?? ''}
             onChange={(e) => setBonusCorrect((prev) => ({ ...prev, [bq.id]: e.target.value }))}
           />
         </label>
       ))}
-      <p>
-        Nothing here is saved until you submit — the database won't accept a partial answer key while the
-        episode is still open, so entering the key and scoring happen together in one step.
-      </p>
+      <p className="muted">{copy.SCORING_NOTE}</p>
       <button type="submit" disabled={scoring}>
-        {scoring ? 'Scoring…' : episode.status === 'scored' ? 'Re-score' : 'Enter answer key & score'}
+        {scoring ? copy.SCORING : episode.status === 'scored' ? copy.RE_SCORE : copy.ENTER_ANSWER_KEY_AND_SCORE}
       </button>
       {summary && <p>{summary}</p>}
       {error && <p className="error">{error}</p>}
@@ -417,11 +422,11 @@ function ManualOverrides({ episode, players, scores, onChanged }) {
   if (episode.status !== 'scored') return null
 
   return (
-    <div>
-      <h3>Manual overrides</h3>
+    <div className="card">
+      <h3>{copy.MANUAL_OVERRIDES_TITLE}</h3>
       <table>
         <thead>
-          <tr><th>Player</th><th>Total</th><th>Overridden?</th><th></th></tr>
+          <tr><th>{copy.PLAYER}</th><th>{copy.TOTAL}</th><th>{copy.OVERRIDDEN}</th><th></th></tr>
         </thead>
         <tbody>
           {players.map((p) => {
@@ -443,7 +448,7 @@ function ManualOverrides({ episode, players, scores, onChanged }) {
                     onBlur={(e) => handleOverride(p.id, e.target.value)}
                   />
                 </td>
-                <td>{s?.manually_overridden ? 'Yes' : 'No'}</td>
+                <td>{s?.manually_overridden ? copy.YES : copy.NO}</td>
                 <td></td>
               </tr>
             )
@@ -527,34 +532,35 @@ export default function AdminEpisode() {
     await reload()
   }
 
-  if (loading) return <p>Loading…</p>
+  if (loading) return <p>{copy.LOADING}</p>
 
   if (loadError) {
     return (
       <div>
-        <p className="error">Couldn't load this episode: {loadError}</p>
-        <button onClick={() => setRetryCount((n) => n + 1)}>Try again</button>
+        <p className="error">{copy.LOAD_ERROR_PREFIX}{loadError}</p>
+        <button onClick={() => setRetryCount((n) => n + 1)}>{copy.TRY_AGAIN}</button>
       </div>
     )
   }
 
-  if (!episode) return <p>Episode not found.</p>
+  if (!episode) return <p>{copy.EPISODE_NOT_FOUND}</p>
 
   return (
     <div>
-      <h2>Episode {episode.number} — {episode.status}</h2>
+      <h2>
+        {copy.episodeHeading(episode.number)}{' '}
+        <span className={statusBadgeClass(episode.status)}>{episode.status}</span>
+      </h2>
       {error && <p className="error">{error}</p>}
 
       {episode.status === 'draft' && (
-        <button onClick={handlePublish} disabled={publishing}>Publish (open for predictions)</button>
+        <button onClick={handlePublish} disabled={publishing}>{copy.PUBLISH}</button>
       )}
 
-      <h3>Bonus questions</h3>
+      <h3>{copy.BONUS_QUESTIONS_TITLE}</h3>
       <ul>
         {bonusQuestions.map((bq) => (
-          <li key={bq.id}>
-            {bq.prompt} — {bq.type} — {bq.points} pt{bq.points === 1 ? '' : 's'}
-          </li>
+          <li key={bq.id}>{copy.bonusQuestionLine(bq)}</li>
         ))}
       </ul>
       <NewBonusQuestionForm episodeId={episode.id} onAdded={reload} />

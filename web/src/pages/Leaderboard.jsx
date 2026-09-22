@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchLeaderboardData } from '../lib/queries'
+import * as copy from './Leaderboard.copy'
 
 export default function Leaderboard() {
   const [data, setData] = useState(null)
@@ -25,13 +26,13 @@ export default function Leaderboard() {
   if (error) {
     return (
       <div>
-        <p className="error">Couldn't load the leaderboard: {error}</p>
-        <button onClick={() => setRetryCount((n) => n + 1)}>Try again</button>
+        <p className="error">{copy.LOAD_ERROR_PREFIX}{error}</p>
+        <button onClick={() => setRetryCount((n) => n + 1)}>{copy.TRY_AGAIN}</button>
       </div>
     )
   }
 
-  if (!data) return <p>Loading…</p>
+  if (!data) return <p>{copy.LOADING}</p>
 
   const { players, scores, episodes } = data
 
@@ -44,32 +45,34 @@ export default function Leaderboard() {
 
   return (
     <div>
-      <h2>Standings</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Player</th>
-            {episodes.map((ep) => (
-              <th key={ep.id}>
-                <Link to={`/episodes/${ep.number}`}>E{ep.number}</Link>
-              </th>
-            ))}
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {totals.map(({ player, total, playerScores }) => (
-            <tr key={player.id}>
-              <td>{player.display_name}</td>
-              {episodes.map((ep) => {
-                const s = playerScores.find((sc) => sc.episode_id === ep.id)
-                return <td key={ep.id}>{s ? s.total : '—'}</td>
-              })}
-              <td>{total}</td>
+      <h2>{copy.TITLE}</h2>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{copy.PLAYER}</th>
+              {episodes.map((ep) => (
+                <th key={ep.id}>
+                  <Link to={`/episodes/${ep.number}`}>{copy.episodeColumn(ep.number)}</Link>
+                </th>
+              ))}
+              <th>{copy.TOTAL}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {totals.map(({ player, total, playerScores }) => (
+              <tr key={player.id}>
+                <td>{player.display_name}</td>
+                {episodes.map((ep) => {
+                  const s = playerScores.find((sc) => sc.episode_id === ep.id)
+                  return <td key={ep.id}>{s ? s.total : copy.NO_SCORE}</td>
+                })}
+                <td>{total}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
