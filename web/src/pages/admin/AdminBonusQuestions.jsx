@@ -1,21 +1,29 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
-import { fetchUnresolvedBonusQuestions, fetchAllBakers } from '../../lib/queries'
+import {
+  fetchUnresolvedBonusQuestions,
+  fetchGradedBonusQuestions,
+  fetchAllBakers,
+} from '../../lib/queries'
 import { scoreBonusAnswer } from '../../lib/scoring'
 import BakerPicker from '../../components/BakerPicker'
 import * as copy from './AdminBonusQuestions.copy'
 
 async function loadData() {
-  const [bonusQuestions, allBakers] = await Promise.all([
+  const [bonusQuestions, gradedBonusQuestions, allBakers] = await Promise.all([
     fetchUnresolvedBonusQuestions(),
+    fetchGradedBonusQuestions(),
     fetchAllBakers(),
   ])
-  return { bonusQuestions, allBakers }
+  return { bonusQuestions, gradedBonusQuestions, allBakers }
 }
 
 function BonusQuestionRow({ bq, allBakers, onResolved, scoringId, setScoringId }) {
-  const [text, setText] = useState('')
-  const [bakerIds, setBakerIds] = useState([])
+  // Seeded from the existing answer key so an already-graded question opens
+  // prefilled and can be corrected in place; both are null for ungraded rows,
+  // which start blank/empty exactly as before.
+  const [text, setText] = useState(bq.correct_answer ?? '')
+  const [bakerIds, setBakerIds] = useState(bq.correct_baker_ids ?? [])
   const [error, setError] = useState(null)
   const [summary, setSummary] = useState(null)
   const isMultiPick = bq.type === 'baker_multi_pick'
@@ -145,6 +153,7 @@ function BonusQuestionRow({ bq, allBakers, onResolved, scoringId, setScoringId }
 
 export default function AdminBonusQuestions() {
   const [bonusQuestions, setBonusQuestions] = useState([])
+  const [gradedBonusQuestions, setGradedBonusQuestions] = useState([])
   const [allBakers, setAllBakers] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
@@ -161,6 +170,7 @@ export default function AdminBonusQuestions() {
       .then((result) => {
         if (cancelled) return
         setBonusQuestions(result.bonusQuestions)
+        setGradedBonusQuestions(result.gradedBonusQuestions)
         setAllBakers(result.allBakers)
       })
       .catch((err) => {
@@ -177,6 +187,7 @@ export default function AdminBonusQuestions() {
   async function reload() {
     const result = await loadData()
     setBonusQuestions(result.bonusQuestions)
+    setGradedBonusQuestions(result.gradedBonusQuestions)
     setAllBakers(result.allBakers)
   }
 
@@ -194,10 +205,27 @@ export default function AdminBonusQuestions() {
   return (
     <div>
       <h2>{copy.TITLE}</h2>
+      <h3>{copy.NEEDS_GRADING_HEADING}</h3>
       {bonusQuestions.length === 0 ? (
         <p>{copy.NONE_UNRESOLVED}</p>
       ) : (
         bonusQuestions.map((bq) => (
+          <BonusQuestionRow
+            key={bq.id}
+            bq={bq}
+            allBakers={allBakers}
+            onResolved={reload}
+            scoringId={scoringId}
+            setScoringId={setScoringId}
+          />
+        ))
+      )}
+      <h3>{copy.ALREADY_GRADED_HEADING}</h3>
+      <p>{copy.ALREADY_GRADED_HELP}</p>
+      {gradedBonusQuestions.length === 0 ? (
+        <p>{copy.NONE_GRADED}</p>
+      ) : (
+        gradedBonusQuestions.map((bq) => (
           <BonusQuestionRow
             key={bq.id}
             bq={bq}

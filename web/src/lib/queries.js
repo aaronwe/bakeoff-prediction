@@ -115,3 +115,18 @@ export async function fetchUnresolvedBonusQuestions() {
   if (error) throw error
   return data
 }
+
+// The complement of fetchUnresolvedBonusQuestions: questions on scored episodes
+// that already have an answer key. The admin grading page lists these too so a
+// mistyped key can be corrected and re-scored — without this there is no UI
+// anywhere that can change a bonus question's answer once it's been graded.
+export async function fetchGradedBonusQuestions() {
+  const { data, error } = await supabase
+    .from('bonus_questions')
+    .select('*, episodes!inner(number, status)')
+    .eq('episodes.status', 'scored')
+    .or('correct_answer.not.is.null,correct_baker_ids.not.is.null')
+    .order('created_at')
+  if (error) throw error
+  return data
+}

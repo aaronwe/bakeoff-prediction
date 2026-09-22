@@ -30,7 +30,11 @@ function NewBonusQuestionForm({ episodeId, onAdded }) {
       type,
       options:
         type === 'multiple_choice' ? options.split(',').map((s) => s.trim()).filter(Boolean)
-        : type === 'baker_multi_pick' ? { pick_count: Number(pickCount) }
+        // `|| 1` (not `??`): a cleared field yields Number('') === 0 and a
+        // non-numeric one NaN, and a stored pick_count of 0/NaN disables every
+        // checkbox for players and admins alike — with no way to edit it after
+        // creation.
+        : type === 'baker_multi_pick' ? { pick_count: Number(pickCount) || 1 }
         : null,
       include_eliminated: type === 'baker_pick' || type === 'baker_multi_pick' ? includeEliminated : false,
       points: Number(points),
@@ -75,7 +79,7 @@ function NewBonusQuestionForm({ episodeId, onAdded }) {
       {type === 'baker_multi_pick' && (
         <label>
           {copy.PICK_COUNT_LABEL}
-          <input type="number" min="1" value={pickCount} onChange={(e) => setPickCount(e.target.value)} />
+          <input required type="number" min="1" value={pickCount} onChange={(e) => setPickCount(e.target.value)} />
         </label>
       )}
       {type === 'multiple_choice' && (

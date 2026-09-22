@@ -52,11 +52,14 @@ async function main() {
     bonus_question_id: b.bonus_question_id,
     player: playerName(b.player_id),
     answer_text: b.answer_text,
+    // baker_multi_pick answers live here, not in answer_text — without this
+    // column the backup shows a blank cell for every multi-pick answer.
+    answer_baker_ids: (b.answer_baker_ids ?? []).join(' '),
   }))
 
   const scoresCsv = toCsv(scoresRows, ['episode', 'player', 'total', 'manually_overridden', 'breakdown'])
   const answersCsv = toCsv(answersRows, ['episode', 'player', 'technical_pick_id', 'star_baker_pick_id', 'eliminated_pick_id', 'handshake_guess'])
-  const bonusAnswersCsv = toCsv(bonusAnswersRows, ['bonus_question_id', 'player', 'answer_text'])
+  const bonusAnswersCsv = toCsv(bonusAnswersRows, ['bonus_question_id', 'player', 'answer_text', 'answer_baker_ids'])
 
   const dateStr = new Date().toISOString().slice(0, 10)
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')

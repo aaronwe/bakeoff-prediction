@@ -37,12 +37,18 @@ function BakerThumb({ baker }) {
 export default function BakerPicker({ groupName, label, bakers, value, onChange, multiple = false, maxPicks }) {
   if (multiple) {
     const selected = value ?? []
+    // Callers derive maxPicks from a stored options.pick_count, which `??`
+    // can't rescue from 0/NaN. A non-positive cap would disable every checkbox
+    // — including for the admin trying to grade the question — so fall back to
+    // "no cap" rather than "nothing is selectable".
+    const effectiveMaxPicks =
+      Number.isFinite(maxPicks) && maxPicks > 0 ? maxPicks : bakers.length
     function toggle(bakerId) {
       if (selected.includes(bakerId)) {
         onChange(selected.filter((id) => id !== bakerId))
         return
       }
-      if (selected.length >= maxPicks) return
+      if (selected.length >= effectiveMaxPicks) return
       onChange([...selected, bakerId])
     }
     return (
@@ -51,7 +57,7 @@ export default function BakerPicker({ groupName, label, bakers, value, onChange,
         <div className="baker-picker-options">
           {bakers.map((b) => {
             const checked = selected.includes(b.id)
-            const disabled = !checked && selected.length >= maxPicks
+            const disabled = !checked && selected.length >= effectiveMaxPicks
             return (
               <label key={b.id} className={`baker-option${checked ? ' selected' : ''}`}>
                 <input
