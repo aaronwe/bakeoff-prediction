@@ -1,5 +1,6 @@
 export const TITLE = 'Admin'
 export const MANAGE_ROSTER = 'Manage baker roster'
+export const MANAGE_PLAYERS = 'Manage players'
 export const CREATE_EPISODE = 'Create new episode'
 export const GRADE_BONUS_QUESTIONS = 'Grade bonus questions'
 export const LOAD_ERROR_PREFIX = "Couldn't load episodes: "

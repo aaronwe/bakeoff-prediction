@@ -225,6 +225,15 @@ button:disabled {
   background: var(--color-surface-alt);
 }
 
+.button-danger {
+  background: var(--color-error);
+  color: #fff;
+}
+
+.button-danger:hover:not(:disabled) {
+  filter: brightness(0.9);
+}
+
 .intro-note-label {
   display: block;
   margin-bottom: var(--space-3);

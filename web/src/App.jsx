@@ -8,6 +8,7 @@ import RequireAuth from './components/RequireAuth'
 import RequireAdmin from './components/RequireAdmin'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminRoster from './pages/admin/AdminRoster'
+import AdminPlayers from './pages/admin/AdminPlayers'
 import AdminNewEpisode from './pages/admin/AdminNewEpisode'
 import AdminEpisode from './pages/admin/AdminEpisode'
 import AdminBonusQuestions from './pages/admin/AdminBonusQuestions'
@@ -24,6 +25,7 @@ export default function App() {
             <Route path="/episodes/:number" element={<RequireAuth><EpisodeReveal /></RequireAuth>} />
             <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
             <Route path="/admin/roster" element={<RequireAdmin><AdminRoster /></RequireAdmin>} />
+            <Route path="/admin/players" element={<RequireAdmin><AdminPlayers /></RequireAdmin>} />
             <Route path="/admin/episodes/new" element={<RequireAdmin><AdminNewEpisode /></RequireAdmin>} />
             <Route path="/admin/episodes/:number" element={<RequireAdmin><AdminEpisode /></RequireAdmin>} />
             <Route path="/admin/bonus-questions" element={<RequireAdmin><AdminBonusQuestions /></RequireAdmin>} />

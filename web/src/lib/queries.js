@@ -28,6 +28,12 @@ export async function fetchAllBakers() {
   return data
 }
 
+export async function fetchAllPlayers() {
+  const { data, error } = await supabase.from('players').select('*').order('display_name')
+  if (error) throw error
+  return data
+}
+
 export async function fetchBonusQuestions(episodeId) {
   const { data, error } = await supabase
     .from('bonus_questions')

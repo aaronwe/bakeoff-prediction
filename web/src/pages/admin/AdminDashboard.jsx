@@ -40,6 +40,9 @@ export default function AdminDashboard() {
         <Link to="/admin/roster">{copy.MANAGE_ROSTER}</Link>
       </p>
       <p>
+        <Link to="/admin/players">{copy.MANAGE_PLAYERS}</Link>
+      </p>
+      <p>
         <Link to="/admin/episodes/new">{copy.CREATE_EPISODE}</Link>
       </p>
       <p>

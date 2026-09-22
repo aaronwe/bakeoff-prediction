@@ -305,3 +305,22 @@ create view players_public as
 select id, display_name from players;
 
 grant select on players_public to authenticated;
+
+-- ── Allow deleting episodes ──────────────────────────────────
+-- answers/bonus_questions/bonus_answers/scores all already cascade off
+-- episodes (see their `on delete cascade` FKs above), but
+-- bakers_eliminated_episode_id_fkey was left with no explicit action, which
+-- defaults to NO ACTION/restrict. Deleting an episode that some baker was
+-- eliminated in would otherwise fail with a foreign key violation. The admin
+-- "delete episode" feature needs the delete to just succeed, so this clears
+-- the now-dangling reference instead of blocking it.
+alter table bakers drop constraint bakers_eliminated_episode_id_fkey;
+alter table bakers
+  add constraint bakers_eliminated_episode_id_fkey
+  foreign key (eliminated_episode_id) references episodes(id) on delete set null;
+
+-- players had no delete policy at all (only players_select/insert/update),
+-- so RLS silently blocked every delete, including an admin's — needed for
+-- the new admin "delete player" feature. answers/bonus_answers/scores rows
+-- for that player already cascade via their own `on delete cascade` FKs.
+create policy players_delete on players for delete using (is_admin());

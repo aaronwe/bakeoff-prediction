@@ -53,6 +53,12 @@ export const LOAD_ERROR_PREFIX = "Couldn't load this episode: "
 export const TRY_AGAIN = 'Try again'
 export const EPISODE_NOT_FOUND = 'Episode not found.'
 export const PUBLISH = 'Publish (open for predictions)'
+export const DANGER_ZONE_TITLE = 'Danger zone'
+export const DELETE_EPISODE = 'Delete episode'
+export const confirmDeleteEpisode = (number) =>
+  `Delete Episode ${number}? This also deletes all of its answers, bonus questions, and scores. This can't be undone.`
+export const DELETE_HAD_NO_EFFECT =
+  "Nothing was deleted — you may not have permission, or this episode was already removed."
 export const BONUS_QUESTIONS_TITLE = 'Bonus questions'
 export const episodeHeading = (number) => `Episode ${number}`
 export const bonusQuestionLine = (bq) => `${bq.prompt} — ${bq.type} — ${bq.points} pt${bq.points === 1 ? '' : 's'}`

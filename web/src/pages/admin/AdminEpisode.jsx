@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import { fetchAllBakers, fetchActiveBakers, fetchBonusQuestions } from '../../lib/queries'
 import { computeScoreForPlayer } from '../../lib/scoring'
@@ -451,6 +451,7 @@ function ManualOverrides({ episode, players, scores, onChanged }) {
 
 export default function AdminEpisode() {
   const { number } = useParams()
+  const navigate = useNavigate()
   const [episode, setEpisode] = useState(null)
   const [bonusQuestions, setBonusQuestions] = useState([])
   const [allBakers, setAllBakers] = useState([])
@@ -462,6 +463,7 @@ export default function AdminEpisode() {
   const [retryCount, setRetryCount] = useState(0)
   const [error, setError] = useState(null)
   const [publishing, setPublishing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -521,6 +523,27 @@ export default function AdminEpisode() {
     await reload()
   }
 
+  async function handleDelete() {
+    if (!window.confirm(copy.confirmDeleteEpisode(episode.number))) return
+    setError(null)
+    setDeleting(true)
+    // .select() forces Postgres to report which rows were actually deleted.
+    // Without it, a delete blocked by RLS or a foreign key look identical to
+    // a real success (no error, just zero rows affected) — the admin would
+    // stay on this page with no feedback that nothing happened.
+    const { data, error: deleteError } = await supabase.from('episodes').delete().eq('id', episode.id).select()
+    setDeleting(false)
+    if (deleteError) {
+      setError(deleteError.message)
+      return
+    }
+    if (!data?.length) {
+      setError(copy.DELETE_HAD_NO_EFFECT)
+      return
+    }
+    navigate('/admin')
+  }
+
   if (loading) return <p>{copy.LOADING}</p>
 
   if (loadError) {
@@ -569,6 +592,13 @@ export default function AdminEpisode() {
         />
       )}
       <ManualOverrides episode={episode} players={players} scores={scores} onChanged={reload} />
+
+      <div className="card">
+        <h3>{copy.DANGER_ZONE_TITLE}</h3>
+        <button className="button-danger" onClick={handleDelete} disabled={deleting}>
+          {copy.DELETE_EPISODE}
+        </button>
+      </div>
     </div>
   )
 }
