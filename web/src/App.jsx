@@ -10,6 +10,7 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminRoster from './pages/admin/AdminRoster'
 import AdminNewEpisode from './pages/admin/AdminNewEpisode'
 import AdminEpisode from './pages/admin/AdminEpisode'
+import AdminBonusQuestions from './pages/admin/AdminBonusQuestions'
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/admin/roster" element={<RequireAdmin><AdminRoster /></RequireAdmin>} />
             <Route path="/admin/episodes/new" element={<RequireAdmin><AdminNewEpisode /></RequireAdmin>} />
             <Route path="/admin/episodes/:number" element={<RequireAdmin><AdminEpisode /></RequireAdmin>} />
+            <Route path="/admin/bonus-questions" element={<RequireAdmin><AdminBonusQuestions /></RequireAdmin>} />
           </Routes>
         </main>
       </HashRouter>
