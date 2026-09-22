@@ -13,18 +13,36 @@ async function loadData() {
   return { bonusQuestions, allBakers }
 }
 
-function BonusQuestionRow({ bq, allBakers, onResolved }) {
+function BonusQuestionRow({ bq, allBakers, onResolved, scoringId, setScoringId }) {
   const [text, setText] = useState('')
   const [bakerIds, setBakerIds] = useState([])
-  const [scoring, setScoring] = useState(false)
   const [error, setError] = useState(null)
   const [summary, setSummary] = useState(null)
   const isMultiPick = bq.type === 'baker_multi_pick'
+  const isScoring = scoringId === bq.id
+  // Disabled while ANY row is scoring, not just this one: every row's upsert
+  // loop reads a snapshot of `scores` taken at click time, so if question A's
+  // loop is still running when question B is scored, B's snapshot predates
+  // A's writes and its merge would silently drop A's just-written
+  // `bonus_<A>` breakdown key. One shared lock across all rows (mirroring
+  // AdminEpisode.jsx's IntroNoteAndLock `saving` flag) serializes them.
+  const disabled = scoringId !== null
 
   async function handleScore() {
-    setScoring(true)
     setError(null)
     setSummary(null)
+
+    if (isMultiPick) {
+      if (bakerIds.length === 0) {
+        setError(copy.PICK_BAKER_ERROR)
+        return
+      }
+    } else if (!text.trim()) {
+      setError(copy.ENTER_ANSWER_ERROR)
+      return
+    }
+
+    setScoringId(bq.id)
 
     // Allowed by enforce_bonus_correct_answer_only_when_scored because this
     // question's own episode was already marked 'scored' long ago — that
@@ -33,13 +51,13 @@ function BonusQuestionRow({ bq, allBakers, onResolved }) {
       .from('bonus_questions')
       .update(
         isMultiPick
-          ? { correct_baker_ids: bakerIds.length ? bakerIds : null }
+          ? { correct_baker_ids: bakerIds }
           : { correct_answer: text || null },
       )
       .eq('id', bq.id)
     if (updateError) {
       setError(updateError.message)
-      setScoring(false)
+      setScoringId(null)
       return
     }
 
@@ -58,7 +76,7 @@ function BonusQuestionRow({ bq, allBakers, onResolved }) {
       .eq('episode_id', bq.episode_id)
     if (resolvedBqError || bonusAnswersError || existingScoresError) {
       setError((resolvedBqError ?? bonusAnswersError ?? existingScoresError).message)
-      setScoring(false)
+      setScoringId(null)
       return
     }
 
@@ -86,14 +104,14 @@ function BonusQuestionRow({ bq, allBakers, onResolved }) {
       )
       if (upsertError) {
         setError(upsertError.message)
-        setScoring(false)
+        setScoringId(null)
         return
       }
       recomputed += 1
     }
 
     setSummary(copy.scoreSummary(recomputed, preserved))
-    setScoring(false)
+    setScoringId(null)
     onResolved()
   }
 
@@ -116,8 +134,8 @@ function BonusQuestionRow({ bq, allBakers, onResolved }) {
           <input value={text} onChange={(e) => setText(e.target.value)} />
         </label>
       )}
-      <button onClick={handleScore} disabled={scoring}>
-        {scoring ? copy.SCORING : copy.SCORE}
+      <button onClick={handleScore} disabled={disabled}>
+        {isScoring ? copy.SCORING : copy.SCORE}
       </button>
       {summary && <p>{summary}</p>}
       {error && <p className="error">{error}</p>}
@@ -131,6 +149,9 @@ export default function AdminBonusQuestions() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [retryCount, setRetryCount] = useState(0)
+  // Shared across every row (see the comment in BonusQuestionRow) so only one
+  // question's grading can be in flight across the whole list at a time.
+  const [scoringId, setScoringId] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -177,7 +198,14 @@ export default function AdminBonusQuestions() {
         <p>{copy.NONE_UNRESOLVED}</p>
       ) : (
         bonusQuestions.map((bq) => (
-          <BonusQuestionRow key={bq.id} bq={bq} allBakers={allBakers} onResolved={reload} />
+          <BonusQuestionRow
+            key={bq.id}
+            bq={bq}
+            allBakers={allBakers}
+            onResolved={reload}
+            scoringId={scoringId}
+            setScoringId={setScoringId}
+          />
         ))
       )}
     </div>
