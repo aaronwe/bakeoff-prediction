@@ -3,11 +3,13 @@ export const ADD_BONUS_QUESTION_TITLE = 'Add a bonus question'
 export const PROMPT_LABEL = 'Prompt'
 export const TYPE_LABEL = 'Type'
 export const TYPE_BAKER_PICK = 'Pick a baker'
+export const TYPE_BAKER_MULTI_PICK = 'Pick multiple bakers'
 export const TYPE_MULTIPLE_CHOICE = 'Multiple choice (custom options)'
 export const TYPE_FREE_TEXT = 'Free text / number'
 export const INCLUDE_ELIMINATED_LABEL = 'Include eliminated bakers'
 export const OPTIONS_LABEL = 'Options (comma-separated)'
 export const POINTS_LABEL = 'Points'
+export const PICK_COUNT_LABEL = 'How many bakers can be picked'
 export const ADD_BONUS_QUESTION = 'Add bonus question'
 
 // IntroNoteAndLock
@@ -27,10 +29,10 @@ export const TECHNICAL_LABEL = 'Technical challenge winner'
 export const STAR_BAKER_LABEL = 'Star Baker'
 export const ELIMINATED_LABEL = 'Who went home'
 export const HANDSHAKE_COUNT_LABEL = 'Handshake count'
-export const correctAnswerLabel = (prompt) => `Correct answer: ${prompt}`
 export const SCORING_NOTE =
   "Nothing here is saved until you submit — the database won't accept a partial answer key while the " +
-  'episode is still open, so entering the key and scoring happen together in one step.'
+  'episode is still open, so entering the key and scoring happen together in one step. Bonus questions ' +
+  'are graded separately, on the Bonus questions page, whenever their answer is known.'
 export const SCORING = 'Scoring…'
 export const RE_SCORE = 'Re-score'
 export const ENTER_ANSWER_KEY_AND_SCORE = 'Enter answer key & score'

@@ -18,6 +18,7 @@ function NewBonusQuestionForm({ episodeId, onAdded }) {
   const [options, setOptions] = useState('')
   const [includeEliminated, setIncludeEliminated] = useState(false)
   const [points, setPoints] = useState('1')
+  const [pickCount, setPickCount] = useState('3')
   const [error, setError] = useState(null)
 
   async function handleSubmit(e) {
@@ -27,8 +28,11 @@ function NewBonusQuestionForm({ episodeId, onAdded }) {
       episode_id: episodeId,
       prompt,
       type,
-      options: type === 'multiple_choice' ? options.split(',').map((s) => s.trim()).filter(Boolean) : null,
-      include_eliminated: type === 'baker_pick' ? includeEliminated : false,
+      options:
+        type === 'multiple_choice' ? options.split(',').map((s) => s.trim()).filter(Boolean)
+        : type === 'baker_multi_pick' ? { pick_count: Number(pickCount) }
+        : null,
+      include_eliminated: type === 'baker_pick' || type === 'baker_multi_pick' ? includeEliminated : false,
       points: Number(points),
     })
     if (insertError) {
@@ -38,6 +42,7 @@ function NewBonusQuestionForm({ episodeId, onAdded }) {
     setPrompt('')
     setOptions('')
     setPoints('1')
+    setPickCount('3')
     onAdded()
   }
 
@@ -52,11 +57,12 @@ function NewBonusQuestionForm({ episodeId, onAdded }) {
         {copy.TYPE_LABEL}
         <select value={type} onChange={(e) => setType(e.target.value)}>
           <option value="baker_pick">{copy.TYPE_BAKER_PICK}</option>
+          <option value="baker_multi_pick">{copy.TYPE_BAKER_MULTI_PICK}</option>
           <option value="multiple_choice">{copy.TYPE_MULTIPLE_CHOICE}</option>
           <option value="free_text">{copy.TYPE_FREE_TEXT}</option>
         </select>
       </label>
-      {type === 'baker_pick' && (
+      {(type === 'baker_pick' || type === 'baker_multi_pick') && (
         <label>
           <input
             type="checkbox"
@@ -64,6 +70,12 @@ function NewBonusQuestionForm({ episodeId, onAdded }) {
             onChange={(e) => setIncludeEliminated(e.target.checked)}
           />
           {copy.INCLUDE_ELIMINATED_LABEL}
+        </label>
+      )}
+      {type === 'baker_multi_pick' && (
+        <label>
+          {copy.PICK_COUNT_LABEL}
+          <input type="number" min="1" value={pickCount} onChange={(e) => setPickCount(e.target.value)} />
         </label>
       )}
       {type === 'multiple_choice' && (
@@ -214,14 +226,11 @@ function IntroNoteAndLock({ episode, onChanged }) {
   )
 }
 
-function AnswerKeyAndScore({ episode, bonusQuestions, allBakers, onChanged }) {
+function AnswerKeyAndScore({ episode, allBakers, onChanged }) {
   const [technicalWinner, setTechnicalWinner] = useState(episode.technical_winner_baker_id ?? '')
   const [starBaker, setStarBaker] = useState(episode.star_baker_id ?? '')
   const [eliminated, setEliminated] = useState(episode.eliminated_baker_id ?? '')
   const [handshakeCount, setHandshakeCount] = useState(episode.handshake_count ?? '')
-  const [bonusCorrect, setBonusCorrect] = useState(
-    Object.fromEntries(bonusQuestions.map((bq) => [bq.id, bq.correct_answer ?? ''])),
-  )
   const [error, setError] = useState(null)
   const [summary, setSummary] = useState(null)
   const [scoring, setScoring] = useState(false)
@@ -250,21 +259,6 @@ function AnswerKeyAndScore({ episode, bonusQuestions, allBakers, onChanged }) {
       setError(episodeError.message)
       setScoring(false)
       return
-    }
-
-    // Must run after the episodes update above — the
-    // bonus_questions_correct_answer_guard trigger checks that this
-    // bonus question's episode is already 'scored'.
-    for (const bq of bonusQuestions) {
-      const { error: bqError } = await supabase
-        .from('bonus_questions')
-        .update({ correct_answer: bonusCorrect[bq.id] || null })
-        .eq('id', bq.id)
-      if (bqError) {
-        setError(bqError.message)
-        setScoring(false)
-        return
-      }
     }
 
     // Re-fetch rather than reuse local state, so scoring always computes
@@ -371,15 +365,6 @@ function AnswerKeyAndScore({ episode, bonusQuestions, allBakers, onChanged }) {
         {copy.HANDSHAKE_COUNT_LABEL}
         <input type="number" min="0" value={handshakeCount} onChange={(e) => setHandshakeCount(e.target.value)} />
       </label>
-      {bonusQuestions.map((bq) => (
-        <label key={bq.id}>
-          {copy.correctAnswerLabel(bq.prompt)}
-          <input
-            value={bonusCorrect[bq.id] ?? ''}
-            onChange={(e) => setBonusCorrect((prev) => ({ ...prev, [bq.id]: e.target.value }))}
-          />
-        </label>
-      ))}
       <p className="muted">{copy.SCORING_NOTE}</p>
       <button type="submit" disabled={scoring}>
         {scoring ? copy.SCORING : episode.status === 'scored' ? copy.RE_SCORE : copy.ENTER_ANSWER_KEY_AND_SCORE}
@@ -575,7 +560,6 @@ export default function AdminEpisode() {
         <AnswerKeyAndScore
           key={episode.id}
           episode={episode}
-          bonusQuestions={bonusQuestions}
           allBakers={allBakers}
           onChanged={reload}
         />
