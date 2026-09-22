@@ -2,10 +2,10 @@ export const LOADING_QUESTIONS = "Loading this week's questions…"
 export const LOAD_ERROR_PREFIX = "Couldn't load this week's questions: "
 export const TRY_AGAIN = 'Try again'
 
-export const TECHNICAL_LABEL = 'Who will win the technical challenge?'
-export const STAR_BAKER_LABEL = 'Who will be Star Baker?'
-export const ELIMINATED_LABEL = 'Who will be eliminated?'
-export const HANDSHAKE_LABEL = 'How many handshakes will Paul give?'
+export const TECHNICAL_LABEL = 'Who will win the technical challenge? (1 point)'
+export const STAR_BAKER_LABEL = 'Who will be Star Baker? (1 point)'
+export const ELIMINATED_LABEL = 'Who will be eliminated? (2 points)'
+export const HANDSHAKE_LABEL = 'How many handshakes will Paul give? (up to 2 points)'
 export const SELECT_AN_OPTION = 'Select an option'
 
 export const SAVING = 'Saving…'
