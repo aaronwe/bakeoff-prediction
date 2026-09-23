@@ -122,6 +122,11 @@ th {
   letter-spacing: 0.03em;
 }
 
+.wrap-headers th {
+  white-space: normal;
+  min-width: 120px;
+}
+
 tr:last-child td {
   border-bottom: none;
 }

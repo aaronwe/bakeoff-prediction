@@ -67,6 +67,8 @@ export default function AdminDashboard() {
                 <td><span className={statusBadgeClass(ep.status)}>{ep.status}</span></td>
                 <td>
                   <Link to={`/admin/episodes/${ep.number}`}>{copy.MANAGE}</Link>
+                  {' '}
+                  <Link to={`/admin/episodes/${ep.number}/status`}>{copy.PLAYER_STATUS}</Link>
                 </td>
               </tr>
             ))}

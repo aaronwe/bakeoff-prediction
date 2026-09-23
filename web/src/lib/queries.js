@@ -92,6 +92,35 @@ export async function fetchEpisodeRevealData(episodeNumber) {
   return { episode, bakers, players, answers, bonusQuestions, bonusAnswers, scores }
 }
 
+// Admin-only equivalent of fetchEpisodeRevealData: uses `players`, not
+// players_public, since the admin status page needs every player listed even
+// when they haven't submitted an answer (players_public still works for
+// this, but `players` is what the rest of the admin pages already query and
+// keeps this page from special-casing an RLS view that exists purely for
+// non-admin visibility).
+export async function fetchEpisodeStatusData(episodeNumber) {
+  const { data: episode, error: episodeError } = await supabase
+    .from('episodes')
+    .select('*')
+    .eq('number', episodeNumber)
+    .single()
+  if (episodeError) throw episodeError
+
+  const results = await Promise.all([
+    supabase.from('bakers').select('*'),
+    supabase.from('players').select('*').order('display_name'),
+    supabase.from('answers').select('*').eq('episode_id', episode.id),
+    supabase.from('bonus_questions').select('*').eq('episode_id', episode.id),
+    supabase.from('bonus_answers').select('*, bonus_questions!inner(episode_id)').eq('bonus_questions.episode_id', episode.id),
+    supabase.from('scores').select('*').eq('episode_id', episode.id),
+  ])
+  const firstError = results.find((r) => r.error)?.error
+  if (firstError) throw firstError
+  const [{ data: bakers }, { data: players }, { data: answers }, { data: bonusQuestions }, { data: bonusAnswers }, { data: scores }] = results
+
+  return { episode, bakers, players, answers, bonusQuestions, bonusAnswers, scores }
+}
+
 export async function fetchLeaderboardData() {
   // players_public, not players: players_select's RLS restricts full player
   // rows (which include email) to the caller's own row or an admin, so a
