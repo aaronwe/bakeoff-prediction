@@ -2,7 +2,11 @@ name: Thursday send and backup
 
 on:
   schedule:
-    - cron: '0 13 * * 4'
+    # Off the hour on purpose: GitHub Actions documents that schedule events
+    # queue at the top of every hour under high load and can be delayed
+    # several hours (observed: the Wednesday reminder's first run, scheduled
+    # for 0 13, actually fired at 17:38) or dropped outright.
+    - cron: '7 13 * * 4'
   workflow_dispatch: {}
 
 permissions:
