@@ -7,7 +7,16 @@ import {
 } from '../../lib/queries'
 import { scoreBonusAnswer } from '../../lib/scoring'
 import BakerPicker from '../../components/BakerPicker'
+import JudgeHostPicker from '../../components/JudgeHostPicker'
+import { JUDGES_AND_HOSTS } from '../../lib/judgesAndHosts'
 import * as copy from './AdminBonusQuestions.copy'
+
+// Mirrors WeeklyForm's conversion: judge_host_pick's correct_answer is the
+// same plain name string ("Paul") that answer_text uses, so JudgeHostPicker
+// (which works in terms of person ids) converts at the boundary.
+function idForShortName(shortName) {
+  return JUDGES_AND_HOSTS.find((p) => p.shortName === shortName)?.id ?? ''
+}
 
 async function loadData() {
   const [bonusQuestions, gradedBonusQuestions, allBakers] = await Promise.all([
@@ -135,6 +144,14 @@ function BonusQuestionRow({ bq, allBakers, onResolved, scoringId, setScoringId }
           maxPicks={bq.options?.pick_count ?? allBakers.length}
           value={bakerIds}
           onChange={setBakerIds}
+        />
+      ) : bq.type === 'judge_host_pick' ? (
+        <JudgeHostPicker
+          groupName={`resolve-${bq.id}`}
+          label={copy.correctAnswerLabel(bq.prompt)}
+          people={JUDGES_AND_HOSTS}
+          value={idForShortName(text)}
+          onChange={(id) => setText(JUDGES_AND_HOSTS.find((p) => p.id === id)?.shortName ?? '')}
         />
       ) : (
         <label>

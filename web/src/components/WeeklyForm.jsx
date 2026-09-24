@@ -6,7 +6,18 @@ import {
   fetchMyBonusAnswers,
 } from '../lib/queries'
 import BakerPicker from './BakerPicker'
+import JudgeHostPicker from './JudgeHostPicker'
+import { JUDGES_AND_HOSTS } from '../lib/judgesAndHosts'
 import * as copy from './WeeklyForm.copy'
+
+// judge_host_pick stores the same plain name string (e.g. "Paul") in
+// answer_text that multiple_choice always has, so a question can move
+// between the two types without orphaning answers already submitted
+// against it. JudgeHostPicker itself works in terms of person ids, so this
+// converts at the boundary.
+function idForShortName(shortName) {
+  return JUDGES_AND_HOSTS.find((p) => p.shortName === shortName)?.id ?? ''
+}
 
 function bonusOptionsFor(question, allBakers, activeBakers) {
   if (question.type === 'baker_pick') {
@@ -185,6 +196,21 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
               maxPicks={bq.options?.pick_count ?? pool.length}
               value={bonusAnswerBakerIds[bq.id] ?? []}
               onChange={(ids) => setBonusAnswerBakerIds((prev) => ({ ...prev, [bq.id]: ids }))}
+            />
+          )
+        }
+        if (bq.type === 'judge_host_pick') {
+          return (
+            <JudgeHostPicker
+              key={bq.id}
+              groupName={`bonus-${bq.id}`}
+              label={`${bq.prompt} ${copy.bonusPoints(bq.type, bq.points)}`}
+              people={JUDGES_AND_HOSTS}
+              value={idForShortName(bonusAnswerText[bq.id] ?? '')}
+              onChange={(id) => {
+                const shortName = JUDGES_AND_HOSTS.find((p) => p.id === id)?.shortName ?? ''
+                setBonusAnswerText((prev) => ({ ...prev, [bq.id]: shortName }))
+              }}
             />
           )
         }

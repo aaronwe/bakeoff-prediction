@@ -330,3 +330,15 @@ create policy players_delete on players for delete using (is_admin());
 -- `number`. Nullable: existing/untitled episodes fall back to "Episode N" in
 -- the UI rather than requiring a backfill.
 alter table episodes add column title text;
+
+-- ── Judge/host pick bonus questions ──────────────────────────
+-- "Who said it" style questions rendered with JudgeHostPicker instead of a
+-- plain <select>. Deliberately reuses answer_text/correct_answer (plain
+-- name strings like "Paul") rather than adding id-based columns like
+-- baker_multi_pick's — those columns already existed for multiple_choice,
+-- and keeping the same text format lets a question be switched from
+-- multiple_choice to judge_host_pick without orphaning answers already
+-- submitted against it.
+alter table bonus_questions drop constraint bonus_questions_type_check;
+alter table bonus_questions add constraint bonus_questions_type_check
+  check (type in ('baker_pick', 'multiple_choice', 'free_text', 'baker_multi_pick', 'judge_host_pick'));
