@@ -10,11 +10,11 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write
+  contents: read
 
 # A manual "Send now" run overlapping the scheduled run would otherwise let
-# both fire the email step before either reaches the push, sending real
-# players a duplicate.
+# both read the episode as not-yet-sent and fire the email step before
+# either writes email_sent_at back, sending real players a duplicate.
 concurrency:
   group: thursday-send
   cancel-in-progress: false
@@ -54,12 +54,3 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: node backup-scores.mjs
-
-      - name: Commit backup CSVs if changed
-        run: |
-          git config user.name "bakeoff-bot"
-          git config user.email "actions@github.com"
-          git add backups/
-          git diff --cached --quiet || git commit -m "Weekly score backup $(date -u +%Y-%m-%d)"
-          git pull --rebase
-          git push
