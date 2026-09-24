@@ -13,12 +13,31 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
+// `!== false`, not a truthy check: an episode row with the *_enabled column
+// unset (existing episodes, or a fixture predating the column) must still
+// count as enabled — only an explicit `false` turns a question off.
+function regularQuestionsLine(episode, hasBonusQuestions) {
+  const regularQuestions = [
+    episode.technical_enabled !== false && 'technical winner',
+    episode.star_baker_enabled !== false && 'star baker',
+    episode.eliminated_enabled !== false && 'eliminated baker',
+    episode.handshake_enabled !== false && 'handshake count',
+  ].filter(Boolean)
+
+  if (regularQuestions.length) {
+    return `This week's questions: ${regularQuestions.join(', ')}${hasBonusQuestions ? ', plus bonus questions:' : '.'}`
+  }
+  return hasBonusQuestions
+    ? "This week's questions:"
+    : "This week's questions are open — check the site for details."
+}
+
 export function buildWeeklyEmailHtml({ episode, bonusQuestions, siteUrl, previousLeaderboard }) {
   const bonusList = bonusQuestions
     .map((bq) => `<li>${escapeHtml(bq.prompt)} (${bq.points} pt${bq.points === 1 ? '' : 's'})</li>`)
     .join('')
 
-  const leaderboardSection = previousLeaderboard
+  const leaderboardSection = previousLeaderboard?.rows.length
     ? `<h3>Standings after episode ${previousLeaderboard.episodeNumber}</h3>
        <ol>${previousLeaderboard.rows.map((r) => `<li>${escapeHtml(r.name)}: ${r.total}</li>`).join('')}</ol>`
     : ''
@@ -27,7 +46,7 @@ export function buildWeeklyEmailHtml({ episode, bonusQuestions, siteUrl, previou
     <div>
       <h2>${escapeHtml(episodeLabel(episode))} predictions are open!</h2>
       ${episode.intro_note ? `<p>${escapeHtml(episode.intro_note)}</p>` : ''}
-      <p>This week's questions: technical winner, star baker, eliminated baker, handshake count${bonusQuestions.length ? ', plus bonus questions:' : '.'}</p>
+      <p>${regularQuestionsLine(episode, bonusQuestions.length > 0)}</p>
       ${bonusQuestions.length ? `<ul>${bonusList}</ul>` : ''}
       <p><a href="${siteUrl}">Submit your predictions</a></p>
       ${leaderboardSection}

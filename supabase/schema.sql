@@ -331,6 +331,19 @@ create policy players_delete on players for delete using (is_admin());
 -- the UI rather than requiring a backfill.
 alter table episodes add column title text;
 
+-- ── Toggleable regular questions ─────────────────────────────
+-- Lets an episode skip one of the 4 fixed questions when it doesn't apply
+-- that week (no technical challenge, or a multiple-elimination week where
+-- "who's eliminated" doesn't have a single answer — add a baker_multi_pick
+-- bonus question instead for those). computeScoreForPlayer already treats a
+-- null answer key as 0 points either way; these flags only control whether
+-- players/admins are shown the question at all. All default true so
+-- existing and future episodes are unaffected unless explicitly toggled off.
+alter table episodes add column technical_enabled boolean not null default true;
+alter table episodes add column star_baker_enabled boolean not null default true;
+alter table episodes add column eliminated_enabled boolean not null default true;
+alter table episodes add column handshake_enabled boolean not null default true;
+
 -- ── Judge/host pick bonus questions ──────────────────────────
 -- "Who said it" style questions rendered with JudgeHostPicker instead of a
 -- plain <select>. Deliberately reuses answer_text/correct_answer (plain

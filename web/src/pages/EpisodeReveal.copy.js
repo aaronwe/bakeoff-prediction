@@ -11,5 +11,21 @@ export const TOTAL = 'Total'
 
 export const resultsTitle = (episode) => `${episodeLabel(episode)} results`
 export const notScoredYet = (episode) => `${episodeLabel(episode)} hasn't been scored yet — check back after Wednesday.`
-export const summaryLine = ({ technicalWinner, starBaker, eliminatedBaker, handshakeCount }) =>
-  `Technical winner: ${technicalWinner} · Star Baker: ${starBaker} · Went home: ${eliminatedBaker} · Handshakes: ${handshakeCount}`
+export const summaryLine = ({
+  technicalWinner,
+  starBaker,
+  eliminatedBaker,
+  handshakeCount,
+  technicalEnabled,
+  starBakerEnabled,
+  eliminatedEnabled,
+  handshakeEnabled,
+}) =>
+  [
+    technicalEnabled && `Technical winner: ${technicalWinner}`,
+    starBakerEnabled && `Star Baker: ${starBaker}`,
+    eliminatedEnabled && `Went home: ${eliminatedBaker}`,
+    handshakeEnabled && `Handshakes: ${handshakeCount}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')

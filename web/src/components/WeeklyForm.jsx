@@ -149,39 +149,47 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
       <h2>{copy.episodeTitle(episode)}</h2>
       {episode.intro_note && <p className="muted">{episode.intro_note}</p>}
 
-      <BakerPicker
-        groupName="technical-pick"
-        label={copy.TECHNICAL_LABEL}
-        bakers={activeBakers}
-        value={technicalPick}
-        onChange={setTechnicalPick}
-      />
-
-      <BakerPicker
-        groupName="star-baker-pick"
-        label={copy.STAR_BAKER_LABEL}
-        bakers={activeBakers}
-        value={starBakerPick}
-        onChange={setStarBakerPick}
-      />
-
-      <BakerPicker
-        groupName="eliminated-pick"
-        label={copy.ELIMINATED_LABEL}
-        bakers={activeBakers}
-        value={eliminatedPick}
-        onChange={setEliminatedPick}
-      />
-
-      <label>
-        {copy.HANDSHAKE_LABEL}
-        <input
-          type="number"
-          min="0"
-          value={handshakeGuess}
-          onChange={(e) => setHandshakeGuess(e.target.value)}
+      {episode.technical_enabled !== false && (
+        <BakerPicker
+          groupName="technical-pick"
+          label={copy.TECHNICAL_LABEL}
+          bakers={activeBakers}
+          value={technicalPick}
+          onChange={setTechnicalPick}
         />
-      </label>
+      )}
+
+      {episode.star_baker_enabled !== false && (
+        <BakerPicker
+          groupName="star-baker-pick"
+          label={copy.STAR_BAKER_LABEL}
+          bakers={activeBakers}
+          value={starBakerPick}
+          onChange={setStarBakerPick}
+        />
+      )}
+
+      {episode.eliminated_enabled !== false && (
+        <BakerPicker
+          groupName="eliminated-pick"
+          label={copy.ELIMINATED_LABEL}
+          bakers={activeBakers}
+          value={eliminatedPick}
+          onChange={setEliminatedPick}
+        />
+      )}
+
+      {episode.handshake_enabled !== false && (
+        <label>
+          {copy.HANDSHAKE_LABEL}
+          <input
+            type="number"
+            min="0"
+            value={handshakeGuess}
+            onChange={(e) => setHandshakeGuess(e.target.value)}
+          />
+        </label>
+      )}
 
       {bonusQuestions.map((bq) => {
         if (bq.type === 'baker_multi_pick') {

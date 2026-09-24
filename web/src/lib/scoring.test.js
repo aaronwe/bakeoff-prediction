@@ -156,6 +156,39 @@ describe('computeScoreForPlayer', () => {
     expect(result.total).toBe(2)
   })
 
+  // Additional coverage: a question turned off for the episode (e.g. no
+  // elimination that week) must be omitted from the breakdown entirely, not
+  // just scored as 0 — the admin toggles this off precisely so the question
+  // never applied, and the breakdown should reflect that.
+  it('omits a disabled regular question from the breakdown', () => {
+    const episodeWithEliminationOff = { ...episode, eliminated_enabled: false }
+    const answer = {
+      technical_pick_id: 'baker-1',
+      star_baker_pick_id: 'baker-2',
+      eliminated_pick_id: 'baker-3',
+      handshake_guess: 5,
+    }
+    const result = computeScoreForPlayer({
+      episode: episodeWithEliminationOff,
+      answer,
+      bonusQuestions: [],
+      bonusAnswers: [],
+    })
+    expect(result.breakdown).toEqual({ technical: 1, star_baker: 1, handshake: 2 })
+    expect(result.total).toBe(4)
+  })
+
+  it('treats a missing *_enabled flag as enabled (back-compat with episodes/tests predating the column)', () => {
+    const answer = {
+      technical_pick_id: 'baker-1',
+      star_baker_pick_id: 'baker-2',
+      eliminated_pick_id: 'baker-3',
+      handshake_guess: 5,
+    }
+    const result = computeScoreForPlayer({ episode, answer, bonusQuestions: [], bonusAnswers: [] })
+    expect(Object.keys(result.breakdown)).toEqual(['technical', 'star_baker', 'eliminated', 'handshake'])
+  })
+
   it('includes bonus question points keyed by bonus question id', () => {
     const bonusQuestions = [
       { id: 'bq-1', type: 'free_text', correct_answer: 'Priya', points: 2 },

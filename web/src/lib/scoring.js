@@ -32,11 +32,22 @@ export function computeScoreForPlayer({ episode, answer, bonusQuestions, bonusAn
   // key (episode.*_id is null) and a skipped question (answer.*_id is null)
   // would otherwise both be null and a bare `===` would wrongly score it as
   // a match. `&&` short-circuits that null-vs-null case to 0.
-  const breakdown = {
-    technical: answer.technical_pick_id && answer.technical_pick_id === episode.technical_winner_baker_id ? 1 : 0,
-    star_baker: answer.star_baker_pick_id && answer.star_baker_pick_id === episode.star_baker_id ? 1 : 0,
-    eliminated: answer.eliminated_pick_id && answer.eliminated_pick_id === episode.eliminated_baker_id ? 2 : 0,
-    handshake: scoreHandshake(answer.handshake_guess, episode.handshake_count),
+  //
+  // `!== false`, not a truthy check: an episode object with the flag simply
+  // absent (e.g. in older tests/fixtures, before this column existed) must
+  // still count as enabled — only an explicit `false` turns a question off.
+  const breakdown = {}
+  if (episode.technical_enabled !== false) {
+    breakdown.technical = answer.technical_pick_id && answer.technical_pick_id === episode.technical_winner_baker_id ? 1 : 0
+  }
+  if (episode.star_baker_enabled !== false) {
+    breakdown.star_baker = answer.star_baker_pick_id && answer.star_baker_pick_id === episode.star_baker_id ? 1 : 0
+  }
+  if (episode.eliminated_enabled !== false) {
+    breakdown.eliminated = answer.eliminated_pick_id && answer.eliminated_pick_id === episode.eliminated_baker_id ? 2 : 0
+  }
+  if (episode.handshake_enabled !== false) {
+    breakdown.handshake = scoreHandshake(answer.handshake_guess, episode.handshake_count)
   }
 
   for (const bq of bonusQuestions) {

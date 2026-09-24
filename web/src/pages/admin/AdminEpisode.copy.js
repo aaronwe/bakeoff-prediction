@@ -25,6 +25,12 @@ export const SEND_NOW = 'Send now (opens GitHub Actions — click "Run workflow"
 export const LOCK_AND_READY = 'Lock & ready to send'
 export const emailSentAt = (dateString) => `Email sent at ${dateString}.`
 
+// RegularQuestionsToggle
+export const REGULAR_QUESTIONS_TITLE = 'Regular questions'
+export const REGULAR_QUESTIONS_NOTE =
+  "Turn off any question that doesn't apply this week (no technical challenge, or a multiple-elimination week where " +
+  "there's no single answer for who went home) — add a bonus question instead if you need something custom for it."
+
 // AnswerKeyAndScore
 export const ANSWER_KEY_TITLE = 'Answer key & scoring'
 export const TECHNICAL_LABEL = 'Technical challenge winner'

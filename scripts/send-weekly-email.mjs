@@ -80,7 +80,7 @@ async function main() {
   const text = html.replace(/<[^>]+>/g, '')
 
   for (const player of players ?? []) {
-    await sendMail({ to: player.email, subject: `Bake Off Pool: ${episodeLabel(episode)} predictions are open`, html, text })
+    await sendMail({ to: player.email, subject: `Bake Off Pool: ${episodeLabel(episode)} predictions are open!`, html, text })
   }
 
   const { error: updateError } = await supabaseAdmin

@@ -46,6 +46,10 @@ export default function EpisodeReveal() {
           starBaker: bakerName(bakers, episode.star_baker_id),
           eliminatedBaker: bakerName(bakers, episode.eliminated_baker_id),
           handshakeCount: episode.handshake_count,
+          technicalEnabled: episode.technical_enabled !== false,
+          starBakerEnabled: episode.star_baker_enabled !== false,
+          eliminatedEnabled: episode.eliminated_enabled !== false,
+          handshakeEnabled: episode.handshake_enabled !== false,
         })}
       </p>
 
@@ -54,10 +58,10 @@ export default function EpisodeReveal() {
           <thead>
             <tr>
               <th>{copy.PLAYER}</th>
-              <th>{copy.TECHNICAL}</th>
-              <th>{copy.STAR_BAKER}</th>
-              <th>{copy.ELIMINATED}</th>
-              <th>{copy.HANDSHAKES}</th>
+              {episode.technical_enabled !== false && <th>{copy.TECHNICAL}</th>}
+              {episode.star_baker_enabled !== false && <th>{copy.STAR_BAKER}</th>}
+              {episode.eliminated_enabled !== false && <th>{copy.ELIMINATED}</th>}
+              {episode.handshake_enabled !== false && <th>{copy.HANDSHAKES}</th>}
               {bonusQuestions.map((bq) => (
                 <th key={bq.id}>{bq.prompt}</th>
               ))}
@@ -72,10 +76,10 @@ export default function EpisodeReveal() {
               return (
                 <tr key={p.id}>
                   <td>{p.display_name}</td>
-                  <td>{bakerName(bakers, answer.technical_pick_id)}</td>
-                  <td>{bakerName(bakers, answer.star_baker_pick_id)}</td>
-                  <td>{bakerName(bakers, answer.eliminated_pick_id)}</td>
-                  <td>{answer.handshake_guess ?? copy.NO_ANSWER}</td>
+                  {episode.technical_enabled !== false && <td>{bakerName(bakers, answer.technical_pick_id)}</td>}
+                  {episode.star_baker_enabled !== false && <td>{bakerName(bakers, answer.star_baker_pick_id)}</td>}
+                  {episode.eliminated_enabled !== false && <td>{bakerName(bakers, answer.eliminated_pick_id)}</td>}
+                  {episode.handshake_enabled !== false && <td>{answer.handshake_guess ?? copy.NO_ANSWER}</td>}
                   {bonusQuestions.map((bq) => {
                     const ba = bonusAnswers.find((a) => a.bonus_question_id === bq.id && a.player_id === p.id)
                     if (bq.type === 'baker_multi_pick') {

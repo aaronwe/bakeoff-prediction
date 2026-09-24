@@ -267,6 +267,70 @@ function IntroNoteAndLock({ episode, onChanged }) {
   )
 }
 
+function RegularQuestionsToggle({ episode, onChanged }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function handleToggle(field, checked) {
+    setError(null)
+    setSaving(true)
+    const { error: updateError } = await supabase
+      .from('episodes')
+      .update({ [field]: checked })
+      .eq('id', episode.id)
+    setSaving(false)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+    onChanged()
+  }
+
+  return (
+    <div className="card">
+      <h3>{copy.REGULAR_QUESTIONS_TITLE}</h3>
+      <p className="muted">{copy.REGULAR_QUESTIONS_NOTE}</p>
+      <label>
+        <input
+          type="checkbox"
+          checked={episode.technical_enabled !== false}
+          disabled={saving}
+          onChange={(e) => handleToggle('technical_enabled', e.target.checked)}
+        />
+        {' '}{copy.TECHNICAL_LABEL}
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={episode.star_baker_enabled !== false}
+          disabled={saving}
+          onChange={(e) => handleToggle('star_baker_enabled', e.target.checked)}
+        />
+        {' '}{copy.STAR_BAKER_LABEL}
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={episode.eliminated_enabled !== false}
+          disabled={saving}
+          onChange={(e) => handleToggle('eliminated_enabled', e.target.checked)}
+        />
+        {' '}{copy.ELIMINATED_LABEL}
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={episode.handshake_enabled !== false}
+          disabled={saving}
+          onChange={(e) => handleToggle('handshake_enabled', e.target.checked)}
+        />
+        {' '}{copy.HANDSHAKE_COUNT_LABEL}
+      </label>
+      {error && <p className="error">{error}</p>}
+    </div>
+  )
+}
+
 function AnswerKeyAndScore({ episode, allBakers, onChanged }) {
   const [technicalWinner, setTechnicalWinner] = useState(episode.technical_winner_baker_id ?? '')
   const [starBaker, setStarBaker] = useState(episode.star_baker_id ?? '')
@@ -381,31 +445,39 @@ function AnswerKeyAndScore({ episode, allBakers, onChanged }) {
   return (
     <form className="card" onSubmit={handleSubmit}>
       <h3>{copy.ANSWER_KEY_TITLE}</h3>
-      <BakerPicker
-        groupName="answer-key-technical"
-        label={copy.TECHNICAL_LABEL}
-        bakers={allBakers}
-        value={technicalWinner}
-        onChange={setTechnicalWinner}
-      />
-      <BakerPicker
-        groupName="answer-key-star-baker"
-        label={copy.STAR_BAKER_LABEL}
-        bakers={allBakers}
-        value={starBaker}
-        onChange={setStarBaker}
-      />
-      <BakerPicker
-        groupName="answer-key-eliminated"
-        label={copy.ELIMINATED_LABEL}
-        bakers={allBakers}
-        value={eliminated}
-        onChange={setEliminated}
-      />
-      <label>
-        {copy.HANDSHAKE_COUNT_LABEL}
-        <input type="number" min="0" value={handshakeCount} onChange={(e) => setHandshakeCount(e.target.value)} />
-      </label>
+      {episode.technical_enabled !== false && (
+        <BakerPicker
+          groupName="answer-key-technical"
+          label={copy.TECHNICAL_LABEL}
+          bakers={allBakers}
+          value={technicalWinner}
+          onChange={setTechnicalWinner}
+        />
+      )}
+      {episode.star_baker_enabled !== false && (
+        <BakerPicker
+          groupName="answer-key-star-baker"
+          label={copy.STAR_BAKER_LABEL}
+          bakers={allBakers}
+          value={starBaker}
+          onChange={setStarBaker}
+        />
+      )}
+      {episode.eliminated_enabled !== false && (
+        <BakerPicker
+          groupName="answer-key-eliminated"
+          label={copy.ELIMINATED_LABEL}
+          bakers={allBakers}
+          value={eliminated}
+          onChange={setEliminated}
+        />
+      )}
+      {episode.handshake_enabled !== false && (
+        <label>
+          {copy.HANDSHAKE_COUNT_LABEL}
+          <input type="number" min="0" value={handshakeCount} onChange={(e) => setHandshakeCount(e.target.value)} />
+        </label>
+      )}
       <p className="muted">{copy.SCORING_NOTE}</p>
       <button type="submit" disabled={scoring}>
         {scoring ? copy.SCORING : episode.status === 'scored' ? copy.RE_SCORE : copy.ENTER_ANSWER_KEY_AND_SCORE}
@@ -609,6 +681,7 @@ export default function AdminEpisode() {
       )}
 
       <EpisodeTitleEditor episode={episode} onChanged={reload} />
+      <RegularQuestionsToggle episode={episode} onChanged={reload} />
 
       <h3>{copy.BONUS_QUESTIONS_TITLE}</h3>
       <ul>
