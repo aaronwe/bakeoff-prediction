@@ -6,6 +6,13 @@ export const LOAD_ERROR_PREFIX = "Couldn't load bonus questions: "
 export const TRY_AGAIN = 'Try again'
 export const NONE_UNRESOLVED = 'No bonus questions are waiting to be graded.'
 export const NEEDS_GRADING_HEADING = 'Needs grading'
+export const AIRING_NOW_HEADING = 'Airing now'
+export const AIRING_NOW_HELP =
+  "Jot down a likely answer while the episode is still airing — this doesn't grade anything until the episode " +
+  'is locked and scored and the question moves down to "Needs grading".'
+export const NONE_AIRING = 'No episodes are currently airing.'
+export const SAVE_DRAFT = 'Save draft'
+export const SAVING_DRAFT = 'Saving…'
 export const ALREADY_GRADED_HEADING = 'Already graded'
 export const ALREADY_GRADED_HELP =
   'Fix a wrong answer key here — scoring again rewrites the key and recomputes everyone against it.'

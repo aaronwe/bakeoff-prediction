@@ -3,8 +3,11 @@ import { supabase } from '../../lib/supabaseClient'
 import {
   fetchUnresolvedBonusQuestions,
   fetchGradedBonusQuestions,
+  fetchOpenBonusQuestions,
+  fetchBonusQuestionDraftAnswerKeys,
   fetchAllBakers,
 } from '../../lib/queries'
+import { resolveBonusAnswerKeyDefaults } from '../../lib/draftAnswerKeys'
 import { scoreBonusAnswer } from '../../lib/scoring'
 import BakerPicker from '../../components/BakerPicker'
 import JudgeHostPicker from '../../components/JudgeHostPicker'
@@ -19,20 +22,58 @@ function idForShortName(shortName) {
 }
 
 async function loadData() {
-  const [bonusQuestions, gradedBonusQuestions, allBakers] = await Promise.all([
+  const [bonusQuestions, gradedBonusQuestions, openBonusQuestions, allBakers] = await Promise.all([
     fetchUnresolvedBonusQuestions(),
     fetchGradedBonusQuestions(),
+    fetchOpenBonusQuestions(),
     fetchAllBakers(),
   ])
-  return { bonusQuestions, gradedBonusQuestions, allBakers }
+  const draftableIds = [...bonusQuestions, ...openBonusQuestions].map((bq) => bq.id)
+  const draftRows = await fetchBonusQuestionDraftAnswerKeys(draftableIds)
+  const draftAnswerKeysByQuestionId = Object.fromEntries(draftRows.map((d) => [d.bonus_question_id, d]))
+  return { bonusQuestions, gradedBonusQuestions, openBonusQuestions, allBakers, draftAnswerKeysByQuestionId }
 }
 
-function BonusQuestionRow({ bq, allBakers, onResolved, scoringId, setScoringId }) {
+function BonusAnswerKeyFields({ bq, allBakers, groupPrefix, text, setText, bakerIds, setBakerIds }) {
+  if (bq.type === 'baker_multi_pick') {
+    return (
+      <BakerPicker
+        groupName={`${groupPrefix}-${bq.id}`}
+        label={copy.correctAnswerLabel(bq.prompt)}
+        bakers={allBakers}
+        multiple
+        maxPicks={bq.options?.pick_count ?? allBakers.length}
+        value={bakerIds}
+        onChange={setBakerIds}
+      />
+    )
+  }
+  if (bq.type === 'judge_host_pick') {
+    return (
+      <JudgeHostPicker
+        groupName={`${groupPrefix}-${bq.id}`}
+        label={copy.correctAnswerLabel(bq.prompt)}
+        people={JUDGES_AND_HOSTS}
+        value={idForShortName(text)}
+        onChange={(id) => setText(JUDGES_AND_HOSTS.find((p) => p.id === id)?.shortName ?? '')}
+      />
+    )
+  }
+  return (
+    <label>
+      {copy.correctAnswerLabel(bq.prompt)}
+      <input value={text} onChange={(e) => setText(e.target.value)} />
+    </label>
+  )
+}
+
+function BonusQuestionRow({ bq, allBakers, draftAnswerKey, onResolved, scoringId, setScoringId }) {
   // Seeded from the existing answer key so an already-graded question opens
   // prefilled and can be corrected in place; both are null for ungraded rows,
   // which start blank/empty exactly as before.
-  const [text, setText] = useState(bq.correct_answer ?? '')
-  const [bakerIds, setBakerIds] = useState(bq.correct_baker_ids ?? [])
+  const defaults = resolveBonusAnswerKeyDefaults(bq, draftAnswerKey)
+  const [text, setText] = useState(defaults.text)
+  const [bakerIds, setBakerIds] = useState(defaults.bakerIds)
   const [error, setError] = useState(null)
   const [summary, setSummary] = useState(null)
   const isMultiPick = bq.type === 'baker_multi_pick'
@@ -135,30 +176,15 @@ function BonusQuestionRow({ bq, allBakers, onResolved, scoringId, setScoringId }
   return (
     <div className="card">
       <p>{copy.questionLine(bq)}</p>
-      {isMultiPick ? (
-        <BakerPicker
-          groupName={`resolve-${bq.id}`}
-          label={copy.correctAnswerLabel(bq.prompt)}
-          bakers={allBakers}
-          multiple
-          maxPicks={bq.options?.pick_count ?? allBakers.length}
-          value={bakerIds}
-          onChange={setBakerIds}
-        />
-      ) : bq.type === 'judge_host_pick' ? (
-        <JudgeHostPicker
-          groupName={`resolve-${bq.id}`}
-          label={copy.correctAnswerLabel(bq.prompt)}
-          people={JUDGES_AND_HOSTS}
-          value={idForShortName(text)}
-          onChange={(id) => setText(JUDGES_AND_HOSTS.find((p) => p.id === id)?.shortName ?? '')}
-        />
-      ) : (
-        <label>
-          {copy.correctAnswerLabel(bq.prompt)}
-          <input value={text} onChange={(e) => setText(e.target.value)} />
-        </label>
-      )}
+      <BonusAnswerKeyFields
+        bq={bq}
+        allBakers={allBakers}
+        groupPrefix="resolve"
+        text={text}
+        setText={setText}
+        bakerIds={bakerIds}
+        setBakerIds={setBakerIds}
+      />
       <button onClick={handleScore} disabled={disabled}>
         {isScoring ? copy.SCORING : copy.SCORE}
       </button>
@@ -168,9 +194,58 @@ function BonusQuestionRow({ bq, allBakers, onResolved, scoringId, setScoringId }
   )
 }
 
+function DraftBonusQuestionRow({ bq, allBakers, draftAnswerKey, onSaved }) {
+  const defaults = resolveBonusAnswerKeyDefaults(bq, draftAnswerKey)
+  const [text, setText] = useState(defaults.text)
+  const [bakerIds, setBakerIds] = useState(defaults.bakerIds)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const isMultiPick = bq.type === 'baker_multi_pick'
+
+  async function handleSaveDraft() {
+    setSaving(true)
+    setError(null)
+    const { error: upsertError } = await supabase.from('bonus_question_draft_answer_keys').upsert(
+      {
+        bonus_question_id: bq.id,
+        correct_answer: isMultiPick ? null : (text || null),
+        correct_baker_ids: isMultiPick ? bakerIds : null,
+      },
+      { onConflict: 'bonus_question_id' },
+    )
+    setSaving(false)
+    if (upsertError) {
+      setError(upsertError.message)
+      return
+    }
+    onSaved()
+  }
+
+  return (
+    <div className="card">
+      <p>{copy.questionLine(bq)}</p>
+      <BonusAnswerKeyFields
+        bq={bq}
+        allBakers={allBakers}
+        groupPrefix="draft"
+        text={text}
+        setText={setText}
+        bakerIds={bakerIds}
+        setBakerIds={setBakerIds}
+      />
+      <button onClick={handleSaveDraft} disabled={saving}>
+        {saving ? copy.SAVING_DRAFT : copy.SAVE_DRAFT}
+      </button>
+      {error && <p className="error">{error}</p>}
+    </div>
+  )
+}
+
 export default function AdminBonusQuestions() {
   const [bonusQuestions, setBonusQuestions] = useState([])
   const [gradedBonusQuestions, setGradedBonusQuestions] = useState([])
+  const [openBonusQuestions, setOpenBonusQuestions] = useState([])
+  const [draftAnswerKeysByQuestionId, setDraftAnswerKeysByQuestionId] = useState({})
   const [allBakers, setAllBakers] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
@@ -188,6 +263,8 @@ export default function AdminBonusQuestions() {
         if (cancelled) return
         setBonusQuestions(result.bonusQuestions)
         setGradedBonusQuestions(result.gradedBonusQuestions)
+        setOpenBonusQuestions(result.openBonusQuestions)
+        setDraftAnswerKeysByQuestionId(result.draftAnswerKeysByQuestionId)
         setAllBakers(result.allBakers)
       })
       .catch((err) => {
@@ -205,6 +282,8 @@ export default function AdminBonusQuestions() {
     const result = await loadData()
     setBonusQuestions(result.bonusQuestions)
     setGradedBonusQuestions(result.gradedBonusQuestions)
+    setOpenBonusQuestions(result.openBonusQuestions)
+    setDraftAnswerKeysByQuestionId(result.draftAnswerKeysByQuestionId)
     setAllBakers(result.allBakers)
   }
 
@@ -231,9 +310,25 @@ export default function AdminBonusQuestions() {
             key={bq.id}
             bq={bq}
             allBakers={allBakers}
+            draftAnswerKey={draftAnswerKeysByQuestionId[bq.id]}
             onResolved={reload}
             scoringId={scoringId}
             setScoringId={setScoringId}
+          />
+        ))
+      )}
+      <h3>{copy.AIRING_NOW_HEADING}</h3>
+      <p>{copy.AIRING_NOW_HELP}</p>
+      {openBonusQuestions.length === 0 ? (
+        <p>{copy.NONE_AIRING}</p>
+      ) : (
+        openBonusQuestions.map((bq) => (
+          <DraftBonusQuestionRow
+            key={bq.id}
+            bq={bq}
+            allBakers={allBakers}
+            draftAnswerKey={draftAnswerKeysByQuestionId[bq.id]}
+            onSaved={reload}
           />
         ))
       )}
@@ -247,6 +342,7 @@ export default function AdminBonusQuestions() {
             key={bq.id}
             bq={bq}
             allBakers={allBakers}
+            draftAnswerKey={draftAnswerKeysByQuestionId[bq.id]}
             onResolved={reload}
             scoringId={scoringId}
             setScoringId={setScoringId}
