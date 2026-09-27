@@ -355,3 +355,33 @@ alter table episodes add column handshake_enabled boolean not null default true;
 alter table bonus_questions drop constraint bonus_questions_type_check;
 alter table bonus_questions add constraint bonus_questions_type_check
   check (type in ('baker_pick', 'multiple_choice', 'free_text', 'baker_multi_pick', 'judge_host_pick'));
+
+-- ── Draft answer keys ─────────────────────────────────────────
+-- Lets an admin jot down answers while watching, before locking predictions
+-- and running scores. These live in their own tables (not nullable columns
+-- on episodes/bonus_questions) because RLS can't selectively hide individual
+-- columns on a row a player is otherwise allowed to select — a separate
+-- table with no player-facing select policy at all is what actually keeps a
+-- draft private. See episodes_answer_key_only_when_scored above for the
+-- leak this avoids reproducing.
+create table episode_draft_answer_keys (
+  episode_id uuid primary key references episodes(id) on delete cascade,
+  technical_winner_baker_id uuid references bakers(id),
+  star_baker_id uuid references bakers(id),
+  eliminated_baker_id uuid references bakers(id),
+  handshake_count integer,
+  updated_at timestamptz not null default now()
+);
+alter table episode_draft_answer_keys enable row level security;
+create policy episode_draft_answer_keys_write on episode_draft_answer_keys
+  for all using (is_admin()) with check (is_admin());
+
+create table bonus_question_draft_answer_keys (
+  bonus_question_id uuid primary key references bonus_questions(id) on delete cascade,
+  correct_answer text,
+  correct_baker_ids uuid[],
+  updated_at timestamptz not null default now()
+);
+alter table bonus_question_draft_answer_keys enable row level security;
+create policy bonus_question_draft_answer_keys_write on bonus_question_draft_answer_keys
+  for all using (is_admin()) with check (is_admin());
