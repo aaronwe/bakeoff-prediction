@@ -5,11 +5,16 @@
 // `??`, not `||`: a handshake count or baker id of a falsy-but-real value
 // (0) must not be treated as missing.
 export function resolveEpisodeAnswerKeyDefaults(episode, draftAnswerKey) {
+  // Once scored, the real key is authoritative even for a field the admin
+  // deliberately left null — a stale draft must never resurrect a value at
+  // Re-score time that the admin chose not to set when they originally
+  // locked the episode.
+  const draft = episode.status === 'scored' ? null : draftAnswerKey
   return {
-    technicalWinner: episode.technical_winner_baker_id ?? draftAnswerKey?.technical_winner_baker_id ?? '',
-    starBaker: episode.star_baker_id ?? draftAnswerKey?.star_baker_id ?? '',
-    eliminated: episode.eliminated_baker_id ?? draftAnswerKey?.eliminated_baker_id ?? '',
-    handshakeCount: episode.handshake_count ?? draftAnswerKey?.handshake_count ?? '',
+    technicalWinner: episode.technical_winner_baker_id ?? draft?.technical_winner_baker_id ?? '',
+    starBaker: episode.star_baker_id ?? draft?.star_baker_id ?? '',
+    eliminated: episode.eliminated_baker_id ?? draft?.eliminated_baker_id ?? '',
+    handshakeCount: episode.handshake_count ?? draft?.handshake_count ?? '',
   }
 }
 

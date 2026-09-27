@@ -69,8 +69,9 @@ function BonusAnswerKeyFields({ bq, allBakers, groupPrefix, text, setText, baker
 
 function BonusQuestionRow({ bq, allBakers, draftAnswerKey, onResolved, scoringId, setScoringId }) {
   // Seeded from the existing answer key so an already-graded question opens
-  // prefilled and can be corrected in place; both are null for ungraded rows,
-  // which start blank/empty exactly as before.
+  // prefilled and can be corrected in place; an ungraded row instead seeds
+  // from a saved draft when one exists, and only falls back to blank/empty
+  // when there's neither a real answer nor a draft.
   const defaults = resolveBonusAnswerKeyDefaults(bq, draftAnswerKey)
   const [text, setText] = useState(defaults.text)
   const [bakerIds, setBakerIds] = useState(defaults.bakerIds)
@@ -200,11 +201,13 @@ function DraftBonusQuestionRow({ bq, allBakers, draftAnswerKey, onSaved }) {
   const [bakerIds, setBakerIds] = useState(defaults.bakerIds)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [summary, setSummary] = useState(null)
   const isMultiPick = bq.type === 'baker_multi_pick'
 
   async function handleSaveDraft() {
     setSaving(true)
     setError(null)
+    setSummary(null)
     const { error: upsertError } = await supabase.from('bonus_question_draft_answer_keys').upsert(
       {
         bonus_question_id: bq.id,
@@ -218,6 +221,7 @@ function DraftBonusQuestionRow({ bq, allBakers, draftAnswerKey, onSaved }) {
       setError(upsertError.message)
       return
     }
+    setSummary(copy.DRAFT_SAVED)
     onSaved()
   }
 
@@ -236,6 +240,7 @@ function DraftBonusQuestionRow({ bq, allBakers, draftAnswerKey, onSaved }) {
       <button onClick={handleSaveDraft} disabled={saving}>
         {saving ? copy.SAVING_DRAFT : copy.SAVE_DRAFT}
       </button>
+      {summary && <p>{summary}</p>}
       {error && <p className="error">{error}</p>}
     </div>
   )

@@ -356,14 +356,16 @@ function AnswerKeyAndScore({ episode, allBakers, draftAnswerKey, onChanged }) {
   const [handshakeCount, setHandshakeCount] = useState(defaults.handshakeCount)
   const [error, setError] = useState(null)
   const [summary, setSummary] = useState(null)
-  // Shared by both actions (mirrors IntroNoteAndLock's single `saving` flag):
-  // they write to different tables but both mutate this component's shared
-  // form fields, so letting one fire while the other is in flight risks a
-  // stale-value race.
-  const [scoring, setScoring] = useState(false)
+  // Discriminates which action is in flight (mirrors IntroNoteAndLock's
+  // single `saving` flag, but as a tri-state): both actions write to
+  // different tables but mutate this component's shared form fields, so
+  // letting one fire while the other is in flight risks a stale-value race,
+  // and the button labels need to know which action is actually running.
+  const [busyAction, setBusyAction] = useState(null) // null | 'draft' | 'lock'
+  const busy = busyAction !== null
 
   async function handleSaveDraft() {
-    setScoring(true)
+    setBusyAction('draft')
     setError(null)
     setSummary(null)
     const { error: draftError } = await supabase.from('episode_draft_answer_keys').upsert(
@@ -376,7 +378,7 @@ function AnswerKeyAndScore({ episode, allBakers, draftAnswerKey, onChanged }) {
       },
       { onConflict: 'episode_id' },
     )
-    setScoring(false)
+    setBusyAction(null)
     if (draftError) {
       setError(draftError.message)
       return
@@ -385,9 +387,18 @@ function AnswerKeyAndScore({ episode, allBakers, draftAnswerKey, onChanged }) {
     onChanged()
   }
 
-  async function handleLockAndScore(e) {
+  function handleFormSubmit(e) {
     e.preventDefault()
-    setScoring(true)
+    handleSaveDraft()
+  }
+
+  function handleLockAndScoreClick() {
+    if (episode.status === 'open' && !window.confirm(copy.LOCK_AND_SCORE_CONFIRM)) return
+    handleLockAndScore()
+  }
+
+  async function handleLockAndScore() {
+    setBusyAction('lock')
     setError(null)
     setSummary(null)
 
@@ -397,17 +408,17 @@ function AnswerKeyAndScore({ episode, allBakers, draftAnswerKey, onChanged }) {
     const { error: episodeError } = await supabase
       .from('episodes')
       .update({
-        technical_winner_baker_id: technicalWinner || null,
-        star_baker_id: starBaker || null,
-        eliminated_baker_id: eliminated || null,
-        handshake_count: handshakeCount === '' ? null : Number(handshakeCount),
+        technical_winner_baker_id: episode.technical_enabled !== false ? (technicalWinner || null) : null,
+        star_baker_id: episode.star_baker_enabled !== false ? (starBaker || null) : null,
+        eliminated_baker_id: episode.eliminated_enabled !== false ? (eliminated || null) : null,
+        handshake_count: episode.handshake_enabled !== false ? (handshakeCount === '' ? null : Number(handshakeCount)) : null,
         status: 'scored',
       })
       .eq('id', episode.id)
 
     if (episodeError) {
       setError(episodeError.message)
-      setScoring(false)
+      setBusyAction(null)
       return
     }
 
@@ -427,7 +438,7 @@ function AnswerKeyAndScore({ episode, allBakers, draftAnswerKey, onChanged }) {
       .eq('episode_id', episode.id)
     if (scoredEpisodeError || scoredBonusQuestionsError) {
       setError((scoredEpisodeError ?? scoredBonusQuestionsError).message)
-      setScoring(false)
+      setBusyAction(null)
       return
     }
 
@@ -445,7 +456,7 @@ function AnswerKeyAndScore({ episode, allBakers, draftAnswerKey, onChanged }) {
       .eq('episode_id', episode.id)
     if (answersError || bonusAnswersError || existingScoresError) {
       setError((answersError ?? bonusAnswersError ?? existingScoresError).message)
-      setScoring(false)
+      setBusyAction(null)
       return
     }
 
@@ -476,19 +487,19 @@ function AnswerKeyAndScore({ episode, allBakers, draftAnswerKey, onChanged }) {
       )
       if (upsertError) {
         setError(upsertError.message)
-        setScoring(false)
+        setBusyAction(null)
         return
       }
       recomputed += 1
     }
 
     setSummary(copy.scoreSummary(recomputed, preserved))
-    setScoring(false)
+    setBusyAction(null)
     onChanged()
   }
 
   return (
-    <form className="card" onSubmit={handleLockAndScore}>
+    <form className="card" onSubmit={handleFormSubmit}>
       <h3>{copy.ANSWER_KEY_TITLE}</h3>
       {episode.technical_enabled !== false && (
         <BakerPicker
@@ -524,11 +535,11 @@ function AnswerKeyAndScore({ episode, allBakers, draftAnswerKey, onChanged }) {
         </label>
       )}
       <p className="muted">{copy.SCORING_NOTE}</p>
-      <button type="button" onClick={handleSaveDraft} disabled={scoring}>
-        {copy.SAVE_DRAFT}
+      <button type="submit" disabled={busy}>
+        {busyAction === 'draft' ? copy.SAVING_DRAFT : copy.SAVE_DRAFT}
       </button>{' '}
-      <button type="submit" disabled={scoring}>
-        {scoring ? copy.SCORING : episode.status === 'scored' ? copy.RE_SCORE : copy.ENTER_ANSWER_KEY_AND_SCORE}
+      <button type="button" onClick={handleLockAndScoreClick} disabled={busy}>
+        {busyAction === 'lock' ? copy.SCORING : episode.status === 'scored' ? copy.RE_SCORE : copy.ENTER_ANSWER_KEY_AND_SCORE}
       </button>
       {summary && <p>{summary}</p>}
       {error && <p className="error">{error}</p>}

@@ -39,12 +39,14 @@ export const ELIMINATED_LABEL = 'Who went home'
 export const HANDSHAKE_COUNT_LABEL = 'Handshake count'
 export const SCORING_NOTE =
   'Save draft jots down your answers without affecting anything else — the real answer key and player scores ' +
-  "aren't touched until you click the scoring button, which the database only accepts once the episode is " +
-  'ready (it will reject a partial answer key while the episode is still open). Bonus questions get the same ' +
-  'Save draft option on the Bonus questions page while their episode is still airing; grading them happens ' +
-  'separately, once their answer is known.'
+  "aren't touched until you click the scoring button, which locks predictions, publishes the answer key, and " +
+  'scores every player in one step. Bonus questions get the same Save draft option on the Bonus questions page ' +
+  'while their episode is still airing; grading them happens separately, once their answer is known.'
 export const SAVE_DRAFT = 'Save draft'
+export const SAVING_DRAFT = 'Saving…'
 export const DRAFT_SAVED = 'Draft saved.'
+export const LOCK_AND_SCORE_CONFIRM =
+  'This locks predictions, publishes the answer key, and scores every player immediately. Continue?'
 export const SCORING = 'Scoring…'
 export const RE_SCORE = 'Re-score'
 export const ENTER_ANSWER_KEY_AND_SCORE = 'Enter answer key & score'

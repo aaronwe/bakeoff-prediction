@@ -55,6 +55,28 @@ describe('resolveEpisodeAnswerKeyDefaults', () => {
     expect(resolveEpisodeAnswerKeyDefaults({ handshake_count: 0 }, { handshake_count: 9 }).handshakeCount).toBe(0)
     expect(resolveEpisodeAnswerKeyDefaults({}, { handshake_count: 0 }).handshakeCount).toBe(0)
   })
+
+  it('ignores a stale draft for a field left blank on a scored episode', () => {
+    const episode = {
+      status: 'scored',
+      technical_winner_baker_id: null,
+      star_baker_id: 'star-1',
+      eliminated_baker_id: null,
+      handshake_count: null,
+    }
+    const draft = {
+      technical_winner_baker_id: 'draft-1',
+      star_baker_id: 'draft-2',
+      eliminated_baker_id: 'draft-3',
+      handshake_count: 9,
+    }
+    expect(resolveEpisodeAnswerKeyDefaults(episode, draft)).toEqual({
+      technicalWinner: '',
+      starBaker: 'star-1',
+      eliminated: '',
+      handshakeCount: '',
+    })
+  })
 })
 
 describe('resolveBonusAnswerKeyDefaults', () => {
