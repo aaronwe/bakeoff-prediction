@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
-import { fetchAllBakers, fetchActiveBakers, fetchBonusQuestions } from '../../lib/queries'
+import { fetchAllBakers, fetchActiveBakers, fetchBonusQuestions, fetchDraftAnswerKey } from '../../lib/queries'
 import { computeScoreForPlayer } from '../../lib/scoring'
+import { resolveEpisodeAnswerKeyDefaults } from '../../lib/draftAnswerKeys'
 import BakerPicker from '../../components/BakerPicker'
 import * as copy from './AdminEpisode.copy'
 
@@ -116,16 +117,31 @@ async function loadEpisodeData(episodeNumber) {
     .maybeSingle()
   if (episodeError) throw episodeError
   if (!ep) {
-    return { episode: null, bonusQuestions: [], allBakers: [], activeBakers: [], players: [], scores: [] }
+    return {
+      episode: null,
+      bonusQuestions: [],
+      allBakers: [],
+      activeBakers: [],
+      players: [],
+      scores: [],
+      draftAnswerKey: null,
+    }
   }
-  const [bqs, all, active, { data: playerRows, error: playersError }, { data: scoreRows, error: scoresError }] =
-    await Promise.all([
-      fetchBonusQuestions(ep.id),
-      fetchAllBakers(),
-      fetchActiveBakers(),
-      supabase.from('players').select('*'),
-      supabase.from('scores').select('*').eq('episode_id', ep.id),
-    ])
+  const [
+    bqs,
+    all,
+    active,
+    { data: playerRows, error: playersError },
+    { data: scoreRows, error: scoresError },
+    draftAnswerKey,
+  ] = await Promise.all([
+    fetchBonusQuestions(ep.id),
+    fetchAllBakers(),
+    fetchActiveBakers(),
+    supabase.from('players').select('*'),
+    supabase.from('scores').select('*').eq('episode_id', ep.id),
+    fetchDraftAnswerKey(ep.id),
+  ])
   if (playersError) throw playersError
   if (scoresError) throw scoresError
   return {
@@ -135,6 +151,7 @@ async function loadEpisodeData(episodeNumber) {
     activeBakers: active,
     players: playerRows ?? [],
     scores: scoreRows ?? [],
+    draftAnswerKey,
   }
 }
 
@@ -331,16 +348,44 @@ function RegularQuestionsToggle({ episode, onChanged }) {
   )
 }
 
-function AnswerKeyAndScore({ episode, allBakers, onChanged }) {
-  const [technicalWinner, setTechnicalWinner] = useState(episode.technical_winner_baker_id ?? '')
-  const [starBaker, setStarBaker] = useState(episode.star_baker_id ?? '')
-  const [eliminated, setEliminated] = useState(episode.eliminated_baker_id ?? '')
-  const [handshakeCount, setHandshakeCount] = useState(episode.handshake_count ?? '')
+function AnswerKeyAndScore({ episode, allBakers, draftAnswerKey, onChanged }) {
+  const defaults = resolveEpisodeAnswerKeyDefaults(episode, draftAnswerKey)
+  const [technicalWinner, setTechnicalWinner] = useState(defaults.technicalWinner)
+  const [starBaker, setStarBaker] = useState(defaults.starBaker)
+  const [eliminated, setEliminated] = useState(defaults.eliminated)
+  const [handshakeCount, setHandshakeCount] = useState(defaults.handshakeCount)
   const [error, setError] = useState(null)
   const [summary, setSummary] = useState(null)
+  // Shared by both actions (mirrors IntroNoteAndLock's single `saving` flag):
+  // they write to different tables but both mutate this component's shared
+  // form fields, so letting one fire while the other is in flight risks a
+  // stale-value race.
   const [scoring, setScoring] = useState(false)
 
-  async function handleSubmit(e) {
+  async function handleSaveDraft() {
+    setScoring(true)
+    setError(null)
+    setSummary(null)
+    const { error: draftError } = await supabase.from('episode_draft_answer_keys').upsert(
+      {
+        episode_id: episode.id,
+        technical_winner_baker_id: technicalWinner || null,
+        star_baker_id: starBaker || null,
+        eliminated_baker_id: eliminated || null,
+        handshake_count: handshakeCount === '' ? null : Number(handshakeCount),
+      },
+      { onConflict: 'episode_id' },
+    )
+    setScoring(false)
+    if (draftError) {
+      setError(draftError.message)
+      return
+    }
+    setSummary(copy.DRAFT_SAVED)
+    onChanged()
+  }
+
+  async function handleLockAndScore(e) {
     e.preventDefault()
     setScoring(true)
     setError(null)
@@ -443,7 +488,7 @@ function AnswerKeyAndScore({ episode, allBakers, onChanged }) {
   }
 
   return (
-    <form className="card" onSubmit={handleSubmit}>
+    <form className="card" onSubmit={handleLockAndScore}>
       <h3>{copy.ANSWER_KEY_TITLE}</h3>
       {episode.technical_enabled !== false && (
         <BakerPicker
@@ -479,6 +524,9 @@ function AnswerKeyAndScore({ episode, allBakers, onChanged }) {
         </label>
       )}
       <p className="muted">{copy.SCORING_NOTE}</p>
+      <button type="button" onClick={handleSaveDraft} disabled={scoring}>
+        {copy.SAVE_DRAFT}
+      </button>{' '}
       <button type="submit" disabled={scoring}>
         {scoring ? copy.SCORING : episode.status === 'scored' ? copy.RE_SCORE : copy.ENTER_ANSWER_KEY_AND_SCORE}
       </button>
@@ -567,6 +615,7 @@ export default function AdminEpisode() {
   const [activeBakers, setActiveBakers] = useState([])
   const [players, setPlayers] = useState([])
   const [scores, setScores] = useState([])
+  const [draftAnswerKey, setDraftAnswerKey] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [retryCount, setRetryCount] = useState(0)
@@ -587,6 +636,7 @@ export default function AdminEpisode() {
         setActiveBakers(result.activeBakers)
         setPlayers(result.players)
         setScores(result.scores)
+        setDraftAnswerKey(result.draftAnswerKey)
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err.message)
@@ -608,6 +658,7 @@ export default function AdminEpisode() {
       setActiveBakers(result.activeBakers)
       setPlayers(result.players)
       setScores(result.scores)
+      setDraftAnswerKey(result.draftAnswerKey)
     } catch (err) {
       setError(err.message)
     }
@@ -702,6 +753,7 @@ export default function AdminEpisode() {
           key={episode.id}
           episode={episode}
           allBakers={allBakers}
+          draftAnswerKey={draftAnswerKey}
           onChanged={reload}
         />
       )}
