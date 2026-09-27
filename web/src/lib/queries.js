@@ -165,3 +165,36 @@ export async function fetchGradedBonusQuestions() {
   if (error) throw error
   return data
 }
+
+export async function fetchDraftAnswerKey(episodeId) {
+  const { data, error } = await supabase
+    .from('episode_draft_answer_keys')
+    .select('*')
+    .eq('episode_id', episodeId)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+// Companion to fetchUnresolvedBonusQuestions/fetchGradedBonusQuestions —
+// lists bonus questions whose episode hasn't been locked & scored yet, so
+// the admin can jot a draft answer while watching instead of waiting.
+export async function fetchOpenBonusQuestions() {
+  const { data, error } = await supabase
+    .from('bonus_questions')
+    .select('*, episodes!inner(number, status, title)')
+    .eq('episodes.status', 'open')
+    .order('created_at')
+  if (error) throw error
+  return data
+}
+
+export async function fetchBonusQuestionDraftAnswerKeys(bonusQuestionIds) {
+  if (bonusQuestionIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('bonus_question_draft_answer_keys')
+    .select('*')
+    .in('bonus_question_id', bonusQuestionIds)
+  if (error) throw error
+  return data
+}
