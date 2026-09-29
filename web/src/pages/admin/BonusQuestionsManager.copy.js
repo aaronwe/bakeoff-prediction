@@ -40,4 +40,5 @@ export const confirmDelete = (bq, answerCount) =>
   answerCount > 0
     ? `Delete “${bq.prompt}”? This will also remove ${answerCount} player answer${answerCount === 1 ? '' : 's'} and can’t be undone.`
     : `Delete “${bq.prompt}”? This can’t be undone.`
-export const DELETE_HAD_NO_EFFECT = 'Nothing was deleted (the database refused the change). Try reloading the page.'
+export const CHANGE_HAD_NO_EFFECT = 'Nothing was changed (the database refused the update). Try reloading the page.'
+export const DELETE_HAD_NO_EFFECT ='Nothing was deleted (the database refused the change). Try reloading the page.'

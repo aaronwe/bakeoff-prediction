@@ -130,7 +130,7 @@ function BonusQuestionEditForm({ bq, status, onSaved, onCancel }) {
       return
     }
     if (!data?.length) {
-      setError(copy.DELETE_HAD_NO_EFFECT)
+      setError(copy.CHANGE_HAD_NO_EFFECT)
       return
     }
     onSaved()
@@ -178,7 +178,7 @@ export default function BonusQuestionsManager({ episode, bonusQuestions, onChang
     )
     setBusy(false)
     const failed = results.find((r) => r.error || !r.data?.length)
-    if (failed) setError(failed.error?.message ?? copy.DELETE_HAD_NO_EFFECT)
+    if (failed) setError(failed.error?.message ?? copy.CHANGE_HAD_NO_EFFECT)
     // Reload either way: after a partial failure the database is the truth.
     onChanged()
   }
