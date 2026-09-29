@@ -222,7 +222,7 @@ export default function BonusQuestionsManager({ episode, bonusQuestions, onChang
       {bonusQuestions.length === 0 && <p>{copy.NO_BONUS_QUESTIONS}</p>}
       <ul className="bonus-question-list">
         {bonusQuestions.map((bq, i) => (
-          <li key={bq.id}>
+          <li key={bq.id} className={editingId === bq.id ? undefined : 'bonus-question-row'}>
             {editingId === bq.id ? (
               <BonusQuestionEditForm
                 bq={bq}
@@ -235,19 +235,21 @@ export default function BonusQuestionsManager({ episode, bonusQuestions, onChang
               />
             ) : (
               <>
-                <span>{copy.bonusQuestionLine(bq)}</span>{' '}
-                <button type="button" aria-label={copy.MOVE_UP} title={copy.MOVE_UP} disabled={busy || i === 0} onClick={() => handleMove(bq.id, 'up')}>▲</button>
-                <button type="button" aria-label={copy.MOVE_DOWN} title={copy.MOVE_DOWN} disabled={busy || i === bonusQuestions.length - 1} onClick={() => handleMove(bq.id, 'down')}>▼</button>
-                <button type="button" onClick={() => setEditingId(bq.id)} disabled={busy}>{copy.EDIT}</button>
-                <button
-                  type="button"
-                  className="button-danger"
-                  onClick={() => handleDelete(bq)}
-                  disabled={busy || !rules.canDelete}
-                  title={rules.canDelete ? undefined : copy.DELETE_LOCKED_NOTE}
-                >
-                  {copy.DELETE}
-                </button>
+                <span className="bonus-question-text">{copy.bonusQuestionLine(bq)}</span>
+                <div className="bonus-question-actions">
+                  <button type="button" className="button-ghost" aria-label={copy.MOVE_UP} title={copy.MOVE_UP} disabled={busy || i === 0} onClick={() => handleMove(bq.id, 'up')}>▲</button>
+                  <button type="button" className="button-ghost" aria-label={copy.MOVE_DOWN} title={copy.MOVE_DOWN} disabled={busy || i === bonusQuestions.length - 1} onClick={() => handleMove(bq.id, 'down')}>▼</button>
+                  <button type="button" className="button-ghost" onClick={() => setEditingId(bq.id)} disabled={busy}>{copy.EDIT}</button>
+                  <button
+                    type="button"
+                    className="button-danger"
+                    onClick={() => handleDelete(bq)}
+                    disabled={busy || !rules.canDelete}
+                    title={rules.canDelete ? undefined : copy.DELETE_LOCKED_NOTE}
+                  >
+                    {copy.DELETE}
+                  </button>
+                </div>
               </>
             )}
           </li>
