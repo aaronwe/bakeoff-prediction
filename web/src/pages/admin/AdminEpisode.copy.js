@@ -1,20 +1,5 @@
 import { episodeLabel } from '../../lib/episodeLabel'
 
-// NewBonusQuestionForm
-export const ADD_BONUS_QUESTION_TITLE = 'Add a bonus question'
-export const PROMPT_LABEL = 'Prompt'
-export const TYPE_LABEL = 'Type'
-export const TYPE_BAKER_PICK = 'Pick a baker'
-export const TYPE_BAKER_MULTI_PICK = 'Pick multiple bakers'
-export const TYPE_JUDGE_HOST_PICK = 'Pick a judge or host'
-export const TYPE_MULTIPLE_CHOICE ='Multiple choice (custom options)'
-export const TYPE_FREE_TEXT = 'Free text / number'
-export const INCLUDE_ELIMINATED_LABEL = 'Include eliminated bakers'
-export const OPTIONS_LABEL = 'Options (comma-separated)'
-export const POINTS_LABEL = 'Points'
-export const PICK_COUNT_LABEL = 'How many bakers can be picked'
-export const ADD_BONUS_QUESTION = 'Add bonus question'
-
 // IntroNoteAndLock
 export const WEEKLY_EMAIL_TITLE = 'Weekly email'
 export const INTRO_NOTE_LABEL = "Intro note (shown at the top of Thursday's email)"
@@ -80,4 +65,3 @@ export const episodeHeading = (episode) => episodeLabel(episode)
 // EpisodeTitleEditor
 export const TITLE_LABEL = 'Title (optional)'
 export const SAVE_TITLE = 'Save title'
-export const bonusQuestionLine = (bq) => `${bq.prompt} — ${bq.type} — ${bq.points} pt${bq.points === 1 ? '' : 's'}`
