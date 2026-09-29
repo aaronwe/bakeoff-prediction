@@ -63,6 +63,7 @@ function NewBonusQuestionForm({ episodeId, onAdded }) {
         <select value={type} onChange={(e) => setType(e.target.value)}>
           <option value="baker_pick">{copy.TYPE_BAKER_PICK}</option>
           <option value="baker_multi_pick">{copy.TYPE_BAKER_MULTI_PICK}</option>
+          <option value="judge_host_pick">{copy.TYPE_JUDGE_HOST_PICK}</option>
           <option value="multiple_choice">{copy.TYPE_MULTIPLE_CHOICE}</option>
           <option value="free_text">{copy.TYPE_FREE_TEXT}</option>
         </select>
