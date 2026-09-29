@@ -1,4 +1,3 @@
-// web/src/pages/admin/BonusQuestionsManager.jsx
 import { useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { moveQuestion, nextSortOrder } from '../../lib/bonusOrder'
@@ -173,41 +172,49 @@ export default function BonusQuestionsManager({ episode, bonusQuestions, onChang
     if (changes.length === 0) return
     setError(null)
     setBusy(true)
-    const results = await Promise.all(
-      changes.map((c) => supabase.from('bonus_questions').update({ sort_order: c.sort_order }).eq('id', c.id).select()),
-    )
-    setBusy(false)
-    const failed = results.find((r) => r.error || !r.data?.length)
-    if (failed) setError(failed.error?.message ?? copy.CHANGE_HAD_NO_EFFECT)
-    // Reload either way: after a partial failure the database is the truth.
-    onChanged()
+    try {
+      const results = await Promise.all(
+        changes.map((c) => supabase.from('bonus_questions').update({ sort_order: c.sort_order }).eq('id', c.id).select()),
+      )
+      const failed = results.find((r) => r.error || !r.data?.length)
+      if (failed) setError(failed.error?.message ?? copy.CHANGE_HAD_NO_EFFECT)
+      // Reload either way: after a partial failure the database is the truth.
+      // Stay busy until the reload lands so a fast second click can't act on
+      // the stale order.
+      await onChanged()
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function handleDelete(bq) {
     setError(null)
-    const { count, error: countError } = await supabase
-      .from('bonus_answers')
-      .select('id', { count: 'exact', head: true })
-      .eq('bonus_question_id', bq.id)
-    if (countError) {
-      setError(countError.message)
-      return
-    }
-    if (!window.confirm(copy.confirmDelete(bq, count ?? 0))) return
     setBusy(true)
-    // .select() forces Postgres to report which rows were deleted; without it
-    // an RLS-blocked delete looks identical to a real success.
-    const { data, error: deleteError } = await supabase.from('bonus_questions').delete().eq('id', bq.id).select()
-    setBusy(false)
-    if (deleteError) {
-      setError(deleteError.message)
-      return
+    try {
+      const { count, error: countError } = await supabase
+        .from('bonus_answers')
+        .select('id', { count: 'exact', head: true })
+        .eq('bonus_question_id', bq.id)
+      if (countError) {
+        setError(countError.message)
+        return
+      }
+      if (!window.confirm(copy.confirmDelete(bq, count ?? 0))) return
+      // .select() forces Postgres to report which rows were deleted; without it
+      // an RLS-blocked delete looks identical to a real success.
+      const { data, error: deleteError } = await supabase.from('bonus_questions').delete().eq('id', bq.id).select()
+      if (deleteError) {
+        setError(deleteError.message)
+        return
+      }
+      if (!data?.length) {
+        setError(copy.DELETE_HAD_NO_EFFECT)
+        return
+      }
+      await onChanged()
+    } finally {
+      setBusy(false)
     }
-    if (!data?.length) {
-      setError(copy.DELETE_HAD_NO_EFFECT)
-      return
-    }
-    onChanged()
   }
 
   return (

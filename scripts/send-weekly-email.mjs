@@ -46,6 +46,8 @@ async function main() {
     .from('bonus_questions')
     .select('*')
     .eq('episode_id', episode.id)
+    .order('sort_order')
+    .order('created_at')
   if (bonusError) throw bonusError
 
   const { data: players, error: playersError } = await supabaseAdmin.from('players').select('*')

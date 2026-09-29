@@ -1,5 +1,3 @@
-// web/src/pages/admin/BonusQuestionsManager.copy.js
-
 // Add form (moved from AdminEpisode.copy.js)
 export const ADD_BONUS_QUESTION_TITLE = 'Add a bonus question'
 export const PROMPT_LABEL = 'Prompt'
@@ -41,4 +39,4 @@ export const confirmDelete = (bq, answerCount) =>
     ? `Delete “${bq.prompt}”? This will also remove ${answerCount} player answer${answerCount === 1 ? '' : 's'} and can’t be undone.`
     : `Delete “${bq.prompt}”? This can’t be undone.`
 export const CHANGE_HAD_NO_EFFECT = 'Nothing was changed (the database refused the update). Try reloading the page.'
-export const DELETE_HAD_NO_EFFECT ='Nothing was deleted (the database refused the change). Try reloading the page.'
+export const DELETE_HAD_NO_EFFECT = 'Nothing was deleted (the database refused the change). Try reloading the page.'
