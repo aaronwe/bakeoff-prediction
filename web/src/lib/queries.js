@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { sortBonusQuestions } from './bonusOrder'
 
 export async function fetchOpenEpisode() {
   const { data, error } = await supabase
@@ -39,6 +40,7 @@ export async function fetchBonusQuestions(episodeId) {
     .from('bonus_questions')
     .select('*')
     .eq('episode_id', episodeId)
+    .order('sort_order')
     .order('created_at')
   if (error) throw error
   return data
@@ -89,7 +91,7 @@ export async function fetchEpisodeRevealData(episodeNumber) {
   if (firstError) throw firstError
   const [{ data: bakers }, { data: players }, { data: answers }, { data: bonusQuestions }, { data: bonusAnswers }, { data: scores }] = results
 
-  return { episode, bakers, players, answers, bonusQuestions, bonusAnswers, scores }
+  return { episode, bakers, players, answers, bonusQuestions: sortBonusQuestions(bonusQuestions ?? []), bonusAnswers, scores }
 }
 
 // Admin-only equivalent of fetchEpisodeRevealData: uses `players`, not
@@ -118,7 +120,7 @@ export async function fetchEpisodeStatusData(episodeNumber) {
   if (firstError) throw firstError
   const [{ data: bakers }, { data: players }, { data: answers }, { data: bonusQuestions }, { data: bonusAnswers }, { data: scores }] = results
 
-  return { episode, bakers, players, answers, bonusQuestions, bonusAnswers, scores }
+  return { episode, bakers, players, answers, bonusQuestions: sortBonusQuestions(bonusQuestions ?? []), bonusAnswers, scores }
 }
 
 export async function fetchLeaderboardData() {
@@ -146,9 +148,8 @@ export async function fetchUnresolvedBonusQuestions() {
     .eq('episodes.status', 'scored')
     .is('correct_answer', null)
     .is('correct_baker_ids', null)
-    .order('created_at')
   if (error) throw error
-  return data
+  return sortBonusQuestions(data)
 }
 
 // The complement of fetchUnresolvedBonusQuestions: questions on scored episodes
@@ -161,9 +162,8 @@ export async function fetchGradedBonusQuestions() {
     .select('*, episodes!inner(number, status, title)')
     .eq('episodes.status', 'scored')
     .or('correct_answer.not.is.null,correct_baker_ids.not.is.null')
-    .order('created_at')
   if (error) throw error
-  return data
+  return sortBonusQuestions(data)
 }
 
 export async function fetchDraftAnswerKey(episodeId) {
@@ -184,9 +184,8 @@ export async function fetchOpenBonusQuestions() {
     .from('bonus_questions')
     .select('*, episodes!inner(number, status, title)')
     .eq('episodes.status', 'open')
-    .order('created_at')
   if (error) throw error
-  return data
+  return sortBonusQuestions(data)
 }
 
 export async function fetchBonusQuestionDraftAnswerKeys(bonusQuestionIds) {
