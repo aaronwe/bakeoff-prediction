@@ -11,6 +11,7 @@ export const AIRING_NOW_HELP =
   "Jot down a likely answer while the episode is still airing — this doesn't grade anything until the episode " +
   'is locked and scored and the question moves down to "Needs grading".'
 export const NONE_AIRING = 'No bonus questions on open episodes.'
+export const SELECT_AN_OPTION = 'Select an option'
 export const SAVE_DRAFT = 'Save draft'
 export const SAVING_DRAFT = 'Saving…'
 export const DRAFT_SAVED = 'Draft saved.'

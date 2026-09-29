@@ -8,6 +8,7 @@ import {
 import BakerPicker from './BakerPicker'
 import JudgeHostPicker from './JudgeHostPicker'
 import { JUDGES_AND_HOSTS } from '../lib/judgesAndHosts'
+import { bonusOptionsFor } from '../lib/bonusOptions'
 import * as copy from './WeeklyForm.copy'
 
 // judge_host_pick stores the same plain name string (e.g. "Paul") in
@@ -17,17 +18,6 @@ import * as copy from './WeeklyForm.copy'
 // converts at the boundary.
 function idForShortName(shortName) {
   return JUDGES_AND_HOSTS.find((p) => p.shortName === shortName)?.id ?? ''
-}
-
-function bonusOptionsFor(question, allBakers, activeBakers) {
-  if (question.type === 'baker_pick') {
-    const pool = question.include_eliminated ? allBakers : activeBakers
-    return pool.map((b) => b.name)
-  }
-  if (question.type === 'multiple_choice') {
-    return question.options ?? []
-  }
-  return null // free_text
 }
 
 export default function WeeklyForm({ episode, player, allBakers, activeBakers }) {

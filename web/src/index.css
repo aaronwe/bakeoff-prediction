@@ -189,7 +189,28 @@ form input, form select, form textarea {
   font: inherit;
 }
 
-form input:focus, form select:focus, form textarea:focus {
+/* Admin answer-key rows sit in a .card, not a <form>, so they reuse the form
+   field look explicitly. */
+.answer-key-field {
+  display: block;
+  margin-bottom: var(--space-3);
+  font-weight: 500;
+}
+
+.answer-key-field input, .answer-key-field select {
+  display: block;
+  width: 100%;
+  padding: var(--space-2);
+  margin-top: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+form input:focus, form select:focus, form textarea:focus,
+.answer-key-field input:focus, .answer-key-field select:focus {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
 }

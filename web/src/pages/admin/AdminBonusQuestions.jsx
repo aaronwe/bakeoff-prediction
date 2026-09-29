@@ -12,6 +12,7 @@ import { scoreBonusAnswer } from '../../lib/scoring'
 import BakerPicker from '../../components/BakerPicker'
 import JudgeHostPicker from '../../components/JudgeHostPicker'
 import { JUDGES_AND_HOSTS } from '../../lib/judgesAndHosts'
+import { bonusOptionsFor, withSavedValue } from '../../lib/bonusOptions'
 import * as copy from './AdminBonusQuestions.copy'
 
 // Mirrors WeeklyForm's conversion: judge_host_pick's correct_answer is the
@@ -59,8 +60,24 @@ function BonusAnswerKeyFields({ bq, allBakers, groupPrefix, text, setText, baker
       />
     )
   }
+  // Full roster even for active-only questions: scoring can happen after a
+  // baker who was pickable at answer time has since been eliminated.
+  const options = bonusOptionsFor(bq, allBakers, allBakers)
+  if (options) {
+    return (
+      <label className="answer-key-field">
+        {copy.correctAnswerLabel(bq.prompt)}
+        <select value={text} onChange={(e) => setText(e.target.value)}>
+          <option value="">{copy.SELECT_AN_OPTION}</option>
+          {withSavedValue(options, text).map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+      </label>
+    )
+  }
   return (
-    <label>
+    <label className="answer-key-field">
       {copy.correctAnswerLabel(bq.prompt)}
       <input value={text} onChange={(e) => setText(e.target.value)} />
     </label>
