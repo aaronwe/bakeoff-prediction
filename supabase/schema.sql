@@ -385,3 +385,18 @@ create table bonus_question_draft_answer_keys (
 alter table bonus_question_draft_answer_keys enable row level security;
 create policy bonus_question_draft_answer_keys_write on bonus_question_draft_answer_keys
   for all using (is_admin()) with check (is_admin());
+
+-- ── Bonus question ordering ───────────────────────────────────
+-- Lets the admin reorder an episode's bonus questions. Previously every
+-- query sorted by created_at. Additive with a default, so code deployed
+-- before this runs keeps working; existing rows are backfilled 1..n per
+-- episode in their current (created_at) order so nothing visibly moves.
+alter table bonus_questions add column sort_order integer not null default 0;
+
+update bonus_questions bq
+set sort_order = r.rn
+from (
+  select id, row_number() over (partition by episode_id order by created_at, id) as rn
+  from bonus_questions
+) r
+where r.id = bq.id;
