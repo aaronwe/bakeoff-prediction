@@ -2,7 +2,7 @@ import { episodeLabel } from '../../lib/episodeLabel'
 
 // IntroNoteAndLock
 export const WEEKLY_EMAIL_TITLE = 'Weekly email'
-export const INTRO_NOTE_LABEL = "Intro note (shown at the top of Thursday's email)"
+export const INTRO_NOTE_LABEL = "Intro note (shown at the top of Thursday's email; Markdown supported)"
 export const SAVE_NOTE = 'Save note'
 export const LOCK_ERROR = 'Write an intro note before locking.'
 export const LOCKED_MESSAGE = 'Locked and ready to send.'

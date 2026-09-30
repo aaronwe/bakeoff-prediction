@@ -67,7 +67,7 @@ async function buildWeeklyEmail(episode, siteUrl) {
   return {
     players: players ?? [],
     html,
-    text: html.replace(/<[^>]+>/g, ''),
+    text: html.replace(/<br\s*\/?>|<\/(p|h[1-6]|li|div)>/g, '$&\n').replace(/<[^>]+>/g, ''),
     subject: `Bake Off Pool: ${episodeLabel(episode)} predictions are open!`,
   }
 }
