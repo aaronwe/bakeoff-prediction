@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import { supabaseAdmin } from './lib/supabaseAdmin.mjs'
 import { sendMail } from './lib/mailer.mjs'
-import { buildWeeklyEmailHtml, buildAdminReminderHtml } from './lib/emailTemplates.mjs'
+import { buildWeeklyEmailHtml, buildAdminReminderHtml, htmlToText } from './lib/emailTemplates.mjs'
 import { decideWeeklyAction } from './lib/weeklyEmailDecision.mjs'
 import { episodeLabel } from './lib/episodeLabel.mjs'
 
@@ -67,7 +67,7 @@ async function buildWeeklyEmail(episode, siteUrl) {
   return {
     players: players ?? [],
     html,
-    text: html.replace(/<br\s*\/?>|<\/(p|h[1-6]|li|div)>/g, '$&\n').replace(/<[^>]+>/g, ''),
+    text: htmlToText(html, siteUrl),
     subject: `Bake Off Pool: ${episodeLabel(episode)} predictions are open!`,
   }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildWeeklyEmailHtml, rankRows } from './emailTemplates.mjs'
+import { buildWeeklyEmailHtml, rankRows, htmlToText } from './emailTemplates.mjs'
 
 const episode = { number: 3, intro_note: '' }
 const build = (over = {}) =>
@@ -18,7 +18,8 @@ describe('buildWeeklyEmailHtml', () => {
     const html = build({ episode: { ...episode, intro_note: 'Hello **world**\nnext line\n\nNew para' } })
     expect(html).toContain('<strong>world</strong>')
     expect(html).toContain('<br')
-    expect(html.match(/<p>/g).length).toBeGreaterThanOrEqual(2)
+    expect(html).toContain('<p>Hello <strong>world</strong><br>next line</p>')
+    expect(html).toContain('<p>New para</p>')
   })
 
   it('escapes raw HTML in the intro', () => {
@@ -28,7 +29,9 @@ describe('buildWeeklyEmailHtml', () => {
   })
 
   it('renders nothing for a blank intro', () => {
-    expect(build()).not.toContain('undefined')
+    const html = build({ episode: { ...episode, intro_note: '  \n ' } })
+    expect(html).toBe(build())
+    expect(html).not.toMatch(/<h2>[^]*<\/h2>\s*<p>(?!This week)/)
   })
 
   it('has a big bold CTA', () => {
@@ -51,5 +54,32 @@ describe('buildWeeklyEmailHtml', () => {
 
   it('omits standings when the leaderboard is empty', () => {
     expect(build({ previousLeaderboard: { episodeNumber: 2, rows: [] } })).not.toContain('Standings')
+  })
+
+  it('allows only safe link schemes', () => {
+    const bad = build({ episode: { ...episode, intro_note: '[x](javascript:alert(1))' } })
+    expect(bad).not.toContain('javascript:')
+    expect(bad).not.toContain('<a href="javascript')
+    expect(bad).toContain('<p>x</p>')
+    const ok = build({ episode: { ...episode, intro_note: '[x](https://ok.test)' } })
+    expect(ok).toContain('<a href="https://ok.test">x</a>')
+  })
+
+  it('renders images as alt text only', () => {
+    const html = build({ episode: { ...episode, intro_note: '![pic](https://x/y.png)' } })
+    expect(html).not.toContain('<img')
+    expect(html).toContain('<p>pic</p>')
+  })
+
+  it('does not double-escape code spans', () => {
+    const html = build({ episode: { ...episode, intro_note: '`a & <b>`' } })
+    expect(html).toContain('<code>a &amp; &lt;b&gt;</code>')
+  })
+})
+
+describe('htmlToText', () => {
+  it('keeps line breaks, strips tags, appends the site link', () => {
+    const text = htmlToText('<p>One<br>Two</p><p>Three</p>', 'https://x.test')
+    expect(text).toBe('One\nTwo\nThree\n\nSubmit your predictions: https://x.test\n')
   })
 })

@@ -1,4 +1,4 @@
-import { marked } from 'marked'
+import { Marked } from 'marked'
 import { episodeLabel } from './episodeLabel.mjs'
 
 // Player display names (self-serve, no admin approval per the design's
@@ -33,12 +33,41 @@ function regularQuestionsLine(episode, hasBonusQuestions) {
     : "This week's questions are open — check the site for details."
 }
 
-// Intro note is admin-authored Markdown. `<` and `&` are escaped first so raw
-// HTML is shown as text; `>`, quotes are restored so blockquotes and smart
-// text still work (marked re-escapes them in output).
+// Intro note is admin-authored Markdown. Raw HTML is escaped (shown as text),
+// links are limited to safe schemes, and images degrade to their alt text.
+const SAFE_HREF = /^(https?:|mailto:)/i
+const introMarkdown = new Marked({
+  gfm: true,
+  breaks: true,
+  async: false,
+  renderer: {
+    html(token) {
+      return escapeHtml(token.text)
+    },
+    link(token) {
+      const inner = this.parser.parseInline(token.tokens)
+      if (!SAFE_HREF.test(String(token.href).trim())) return inner
+      const title = token.title ? ` title="${escapeHtml(token.title)}"` : ''
+      return `<a href="${escapeHtml(token.href)}"${title}>${inner}</a>`
+    },
+    image(token) {
+      return escapeHtml(token.text)
+    },
+  },
+})
+
 function renderIntroNote(note) {
   if (!note || !note.trim()) return ''
-  return marked.parse(escapeHtml(note).replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"'), { gfm: true, breaks: true, async: false })
+  return introMarkdown.parse(note)
+}
+
+// Plain-text alternative: keep line breaks, drop tags, end with the site link.
+export function htmlToText(html, siteUrl) {
+  const text = html
+    .replace(/<br\s*\/?>|<\/(p|h[1-6]|li|div)>/g, '$&\n')
+    .replace(/<[^>]+>/g, '')
+    .trim()
+  return siteUrl ? `${text}\n\nSubmit your predictions: ${siteUrl}\n` : text
 }
 
 // Competition ranking: tied rows share a rank and the next rank skips.
