@@ -61,6 +61,9 @@ function renderIntroNote(note) {
   return introMarkdown.parse(note)
 }
 
+// Inverse of escapeHtml. One pass, so `&amp;lt;` decodes to `&lt;`, not `<`.
+const ENTITIES = { lt: '<', gt: '>', quot: '"', '#39': "'", amp: '&' }
+
 // Plain-text alternative: keep line breaks, drop tags, end with the site link.
 export function htmlToText(html, siteUrl) {
   const text = html
@@ -72,6 +75,7 @@ export function htmlToText(html, siteUrl) {
     .replace(/<a href="([^"]*#\/leaderboard)"[^>]*>(View full leaderboard)<\/a>/g, '$2: $1')
     .replace(/<br\s*\/?>|<\/(p|h[1-6]|li|div)>/g, '$&\n')
     .replace(/<[^>]+>/g, '')
+    .replace(/&(lt|gt|quot|#39|amp);/g, (_, e) => ENTITIES[e])
     .replace(/^[ \t]+|[ \t]+$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()

@@ -82,7 +82,7 @@ describe('buildWeeklyEmailHtml', () => {
   it('htmlToText renders standings one row per line with the leaderboard URL', () => {
     const text = htmlToText(standings(), 'https://x.test')
     expect(text).toContain('Standings after episode 2')
-    expect(text).toContain('\n1. A&lt;b&gt;: 4\n1. B: 4\n3. C: 1\n')
+    expect(text).toContain('\n1. A<b>: 4\n1. B: 4\n3. C: 1\n')
     expect(text).toContain('View full leaderboard: https://x.test/#/leaderboard')
     expect(text).not.toMatch(/RankPlayerPoints/)
   })
@@ -116,5 +116,18 @@ describe('htmlToText', () => {
   it('keeps line breaks, strips tags, appends the site link', () => {
     const text = htmlToText('<p>One<br>Two</p><p>Three</p>', 'https://x.test')
     expect(text).toBe('One\nTwo\nThree\n\nSubmit your predictions: https://x.test\n')
+  })
+
+  it('htmlToText decodes HTML entities in names and text', () => {
+    const html = buildWeeklyEmailHtml({
+      episode: { number: 2, name: 'Biscuit Week' },
+      bonusQuestions: [{ prompt: 'Tom & "Jerry" <3', points: 1 }],
+      siteUrl: 'https://x.test',
+      previousLeaderboard: { episodeNumber: 1, rows: [{ name: "A<b> & O'Neil", total: 4 }] },
+    })
+    const text = htmlToText(html, 'https://x.test')
+    expect(text).toContain("1. A<b> & O'Neil: 4")
+    expect(text).toContain('Tom & "Jerry" <3')
+    expect(text).not.toMatch(/&(amp|lt|gt|quot|#39);/)
   })
 })
