@@ -64,8 +64,16 @@ function renderIntroNote(note) {
 // Plain-text alternative: keep line breaks, drop tags, end with the site link.
 export function htmlToText(html, siteUrl) {
   const text = html
+    .replace(/<tr[^>]*>\s*<th[\s\S]*?<\/tr>/g, '')
+    .replace(
+      /<tr[^>]*>\s*<td[^>]*>([^<]*)<\/td>\s*<td[^>]*>([^<]*)<\/td>\s*<td[^>]*>([^<]*)<\/td>\s*<\/tr>/g,
+      '$1. $2: $3\n',
+    )
+    .replace(/<a href="([^"]*#\/leaderboard)"[^>]*>(View full leaderboard)<\/a>/g, '$2: $1')
     .replace(/<br\s*\/?>|<\/(p|h[1-6]|li|div)>/g, '$&\n')
     .replace(/<[^>]+>/g, '')
+    .replace(/^[ \t]+|[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
     .trim()
   return siteUrl ? `${text}\n\nSubmit your predictions: ${siteUrl}\n` : text
 }
@@ -79,14 +87,35 @@ export function rankRows(rows) {
   })
 }
 
+const CELL = 'padding:8px 12px;border-bottom:1px solid #ecdfb8;'
+
+function renderStandings({ episodeNumber, rows }, siteUrl) {
+  const url = escapeHtml(`${String(siteUrl).replace(/\/+$/, '')}/#/leaderboard`)
+  const th = (label, align) =>
+    `<th align="${align}" style="${CELL}background:#fbf3dc;color:#3b2a1e;text-align:${align};font-size:13px">${label}</th>`
+  const body = rankRows(rows)
+    .map((r, i) => {
+      const bg = i % 2 ? 'background:#fdf9ec;' : ''
+      const td = (v, align, extra = '') =>
+        `<td align="${align}" style="${CELL}${bg}color:#3b2a1e;text-align:${align};${extra}">${v}</td>`
+      return `<tr>${td(r.rank, 'left')}${td(escapeHtml(r.name), 'left')}${td(r.total, 'right', 'font-weight:bold;')}</tr>`
+    })
+    .join('')
+  return `<h3 style="margin:24px 0 8px"><a href="${url}" style="color:#a8435c;text-decoration:none">Standings after episode ${episodeNumber}</a></h3>
+       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;max-width:480px;font-size:15px;border-top:1px solid #ecdfb8">
+         <tr>${th('Rank', 'left')}${th('Player', 'left')}${th('Points', 'right')}</tr>
+         ${body}
+       </table>
+       <p style="margin:12px 0"><a href="${url}" style="color:#a8435c">View full leaderboard</a></p>`
+}
+
 export function buildWeeklyEmailHtml({ episode, bonusQuestions, siteUrl, previousLeaderboard }) {
   const bonusList = bonusQuestions
     .map((bq) => `<li>${escapeHtml(bq.prompt)} (${bq.points} pt${bq.points === 1 ? '' : 's'})</li>`)
     .join('')
 
   const leaderboardSection = previousLeaderboard?.rows.length
-    ? `<h3>Standings after episode ${previousLeaderboard.episodeNumber}</h3>
-       ${rankRows(previousLeaderboard.rows).map((r) => `<p style="margin:2px 0">${r.rank}. ${escapeHtml(r.name)}: ${r.total}</p>`).join('')}`
+    ? renderStandings(previousLeaderboard, siteUrl)
     : ''
 
   return `
