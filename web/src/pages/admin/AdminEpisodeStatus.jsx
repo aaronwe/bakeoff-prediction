@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { fetchEpisodeStatusData } from '../../lib/queries'
+import {
+  technicalResult,
+  starBakerResult,
+  eliminatedResult,
+  handshakeResult,
+  bonusTextResult,
+  bonusBakerResult,
+} from '../../lib/answerCorrectness'
 import * as copy from './AdminEpisodeStatus.copy'
 
 function bakerName(bakers, id) {
@@ -61,21 +69,48 @@ export default function AdminEpisodeStatus() {
               return (
                 <tr key={p.id}>
                   <td>{p.display_name}</td>
-                  {episode.technical_enabled !== false && <td>{answer ? bakerName(bakers, answer.technical_pick_id) : copy.NO_ANSWER}</td>}
-                  {episode.star_baker_enabled !== false && <td>{answer ? bakerName(bakers, answer.star_baker_pick_id) : copy.NO_ANSWER}</td>}
-                  {episode.eliminated_enabled !== false && <td>{answer ? bakerName(bakers, answer.eliminated_pick_id) : copy.NO_ANSWER}</td>}
-                  {episode.handshake_enabled !== false && <td>{answer?.handshake_guess ?? copy.NO_ANSWER}</td>}
+                  {episode.technical_enabled !== false && (
+                    <td className={`answer-${technicalResult(answer, episode)}`}>
+                      {answer ? bakerName(bakers, answer.technical_pick_id) : copy.NO_ANSWER}
+                    </td>
+                  )}
+                  {episode.star_baker_enabled !== false && (
+                    <td className={`answer-${starBakerResult(answer, episode)}`}>
+                      {answer ? bakerName(bakers, answer.star_baker_pick_id) : copy.NO_ANSWER}
+                    </td>
+                  )}
+                  {episode.eliminated_enabled !== false && (
+                    <td className={`answer-${eliminatedResult(answer, episode)}`}>
+                      {answer ? bakerName(bakers, answer.eliminated_pick_id) : copy.NO_ANSWER}
+                    </td>
+                  )}
+                  {episode.handshake_enabled !== false && (
+                    <td className={`answer-${handshakeResult(answer, episode)}`}>
+                      {answer?.handshake_guess ?? copy.NO_ANSWER}
+                    </td>
+                  )}
                   {bonusQuestions.map((bq) => {
                     const ba = bonusAnswers.find((a) => a.bonus_question_id === bq.id && a.player_id === p.id)
                     if (bq.type === 'baker_multi_pick') {
                       const ids = ba?.answer_baker_ids ?? []
                       return (
                         <td key={bq.id}>
-                          {ids.length ? ids.map((id) => bakerName(bakers, id)).join(', ') : copy.NO_ANSWER}
+                          {ids.length
+                            ? ids.map((id, i) => (
+                                <span key={id} className={`answer-${bonusBakerResult(bq, id)}`}>
+                                  {i > 0 && ', '}
+                                  {bakerName(bakers, id)}
+                                </span>
+                              ))
+                            : copy.NO_ANSWER}
                         </td>
                       )
                     }
-                    return <td key={bq.id}>{ba?.answer_text ?? copy.NO_ANSWER}</td>
+                    return (
+                      <td key={bq.id} className={`answer-${bonusTextResult(bq, ba)}`}>
+                        {ba?.answer_text ?? copy.NO_ANSWER}
+                      </td>
+                    )
                   })}
                   <td>{score ? score.total : copy.NO_ANSWER}</td>
                 </tr>

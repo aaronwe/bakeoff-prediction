@@ -399,3 +399,14 @@ button:disabled {
   line-height: 1.2;
   word-break: break-word;
 }
+
+.answer-correct {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.answer-incorrect {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
