@@ -9,7 +9,24 @@ import {
   bonusTextResult,
   bonusBakerResult,
 } from '../lib/answerCorrectness'
+import BakerThumb from '../components/BakerThumb'
 import * as copy from './EpisodeReveal.copy'
+
+function SummaryBaker({ label, baker }) {
+  return (
+    <div className="results-summary-card">
+      <span className="results-summary-label">{label}</span>
+      {baker ? (
+        <>
+          <BakerThumb baker={baker} />
+          <span className="results-summary-name">{baker.name}</span>
+        </>
+      ) : (
+        <span className="results-summary-name">{copy.NO_ONE}</span>
+      )}
+    </div>
+  )
+}
 
 function bakerName(bakers, id) {
   return bakers.find((b) => b.id === id)?.name ?? copy.NO_ANSWER
@@ -48,18 +65,23 @@ export default function EpisodeReveal() {
   return (
     <div>
       <h2>{copy.resultsTitle(episode)}</h2>
-      <p>
-        {copy.summaryLine({
-          technicalWinner: bakerName(bakers, episode.technical_winner_baker_id),
-          starBaker: bakerName(bakers, episode.star_baker_id),
-          eliminatedBaker: bakerName(bakers, episode.eliminated_baker_id),
-          handshakeCount: episode.handshake_count,
-          technicalEnabled: episode.technical_enabled !== false,
-          starBakerEnabled: episode.star_baker_enabled !== false,
-          eliminatedEnabled: episode.eliminated_enabled !== false,
-          handshakeEnabled: episode.handshake_enabled !== false,
-        })}
-      </p>
+      <div className="results-summary">
+        {episode.technical_enabled !== false && (
+          <SummaryBaker label={copy.SUMMARY_TECHNICAL} baker={bakers.find((b) => b.id === episode.technical_winner_baker_id)} />
+        )}
+        {episode.star_baker_enabled !== false && (
+          <SummaryBaker label={copy.SUMMARY_STAR_BAKER} baker={bakers.find((b) => b.id === episode.star_baker_id)} />
+        )}
+        {episode.eliminated_enabled !== false && (
+          <SummaryBaker label={copy.SUMMARY_ELIMINATED} baker={bakers.find((b) => b.id === episode.eliminated_baker_id)} />
+        )}
+        {episode.handshake_enabled !== false && (
+          <div className="results-summary-card">
+            <span className="results-summary-label">{copy.SUMMARY_HANDSHAKES}</span>
+            <span className="results-summary-handshakes">{episode.handshake_count ?? copy.NO_ANSWER}</span>
+          </div>
+        )}
+      </div>
 
       <div className="table-wrap">
         <table className="wrap-headers">
