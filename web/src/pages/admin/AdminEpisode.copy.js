@@ -7,7 +7,9 @@ export const SAVE_NOTE = 'Save note'
 export const LOCK_ERROR = 'Write an intro note before locking.'
 export const LOCKED_MESSAGE = 'Locked and ready to send.'
 export const UNLOCK = 'Unlock'
-export const SEND_NOW = 'Send now (opens GitHub Actions — click "Run workflow")'
+export const SEND_TEST = 'Send a test email to me'
+export const SEND_NOW = 'Send now to all players'
+export const RUN_WORKFLOW_HINT = 'These links open GitHub Actions. Click "Run workflow" there to send.'
 export const LOCK_AND_READY = 'Lock & ready to send'
 export const emailSentAt = (dateString) => `Email sent at ${dateString}.`
 

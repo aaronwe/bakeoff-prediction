@@ -107,6 +107,8 @@ function EpisodeTitleEditor({ episode, onChanged }) {
   )
 }
 
+const workflowUrl = (file) => `https://github.com/${import.meta.env.VITE_GITHUB_REPO}/actions/workflows/${file}`
+
 function IntroNoteAndLock({ episode, onChanged }) {
   const [introNote, setIntroNote] = useState(episode.intro_note ?? '')
   const [error, setError] = useState(null)
@@ -176,23 +178,28 @@ function IntroNoteAndLock({ episode, onChanged }) {
         {copy.INTRO_NOTE_LABEL}
         <textarea rows="8" value={introNote} onChange={(e) => setIntroNote(e.target.value)} />
       </label>
-      <button onClick={handleSaveNote} disabled={saving}>{copy.SAVE_NOTE}</button>{' '}
-      {episode.email_locked_at ? (
-        <>
-          <span> {copy.LOCKED_MESSAGE}</span>{' '}
-          <button className="button-ghost" onClick={handleUnlock} disabled={saving}>{copy.UNLOCK}</button>
-          {' '}
-          <a
-            href={`https://github.com/${import.meta.env.VITE_GITHUB_REPO}/actions/workflows/thursday-send.yml`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {copy.SEND_NOW}
-          </a>
-        </>
-      ) : (
-        <button onClick={handleLock} disabled={saving}>{copy.LOCK_AND_READY}</button>
-      )}
+      <div className="weekly-email-actions">
+        <button onClick={handleSaveNote} disabled={saving}>{copy.SAVE_NOTE}</button>
+        {episode.email_locked_at ? (
+          <>
+            <button className="button-ghost" onClick={handleUnlock} disabled={saving}>{copy.UNLOCK}</button>
+            <span className="muted">{copy.LOCKED_MESSAGE}</span>
+          </>
+        ) : (
+          <button onClick={handleLock} disabled={saving}>{copy.LOCK_AND_READY}</button>
+        )}
+      </div>
+      <ul className="weekly-email-links">
+        <li>
+          <a href={workflowUrl('test-weekly-email.yml')} target="_blank" rel="noreferrer">{copy.SEND_TEST}</a>
+        </li>
+        {episode.email_locked_at && (
+          <li>
+            <a href={workflowUrl('thursday-send.yml')} target="_blank" rel="noreferrer">{copy.SEND_NOW}</a>
+          </li>
+        )}
+      </ul>
+      <p className="note">{copy.RUN_WORKFLOW_HINT}</p>
       {episode.email_sent_at && <p className="muted">{copy.emailSentAt(new Date(episode.email_sent_at).toLocaleString())}</p>}
       {error && <p className="error">{error}</p>}
     </div>
