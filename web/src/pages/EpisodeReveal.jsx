@@ -128,7 +128,7 @@ export default function EpisodeReveal() {
                       )
                     }
                     return (
-                      <td key={bq.id} className={`answer-${bonusTextResult(bq, ba)}`}>
+                      <td key={bq.id} className={`answer-${bonusTextResult(bq, ba, bonusAnswers.filter((a) => a.bonus_question_id === bq.id))}`}>
                         {ba?.answer_text ?? copy.NO_ANSWER}
                       </td>
                     )

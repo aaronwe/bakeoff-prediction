@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scoreHandshake, scoreBonusAnswer, computeScoreForPlayer } from './scoring'
+import { scoreHandshake, scoreBonusAnswer, scoreClosestNumber, computeScoreForPlayer } from './scoring'
 
 describe('scoreHandshake', () => {
   it('awards 2 points for an exact match', () => {
@@ -258,5 +258,79 @@ describe('computeScoreForPlayer', () => {
     const result = computeScoreForPlayer({ episode, answer, bonusQuestions, bonusAnswers })
     expect(result.breakdown['bonus_bq-1']).toBe(0)
     expect(result.total).toBe(6)
+  })
+})
+
+describe('scoreClosestNumber', () => {
+  const bq = { id: 'q', type: 'closest_number', correct_answer: '24', points: 1 }
+  const ans = (player_id, answer_text) => ({ bonus_question_id: 'q', player_id, answer_text })
+  const pointsFor = (guesses) => {
+    const all = guesses.map((g, i) => ans(`p${i}`, g))
+    return all.map((a) => scoreClosestNumber(bq, a, all))
+  }
+
+  it('awards 3, 2, 1 to the three closest guesses', () => {
+    expect(pointsFor(['24', '20', '30', '50'])).toEqual([3, 2, 1, 0])
+  })
+
+  it('ranks by distance regardless of over or under', () => {
+    expect(pointsFor(['30', '23', '18'])).toEqual([2, 3, 2])
+  })
+
+  it('gives tied players the higher place and skips the next ones', () => {
+    expect(pointsFor(['25', '20', '20', '20'])).toEqual([3, 2, 2, 2])
+  })
+
+  it('uses absolute distance, so over and under tie (no Price Is Right rules)', () => {
+    const key21 = { ...bq, correct_answer: '21' }
+    const all = ['20', '22', '19', '23'].map((g, i) => ans(`p${i}`, g))
+    expect(all.map((a) => scoreClosestNumber(key21, a, all))).toEqual([3, 3, 1, 1])
+  })
+
+  it('gives both players 3 when tied for first, then 1 for the next', () => {
+    expect(pointsFor(['23', '25', '20', '10'])).toEqual([3, 3, 1, 0])
+  })
+
+  it('scores nothing for 4th place or lower', () => {
+    expect(pointsFor(['24', '25', '26', '27'])).toEqual([3, 2, 1, 0])
+  })
+
+  it('ignores blank and non-numeric guesses, which take no rank', () => {
+    expect(pointsFor(['', 'lots', '24', '10'])).toEqual([0, 0, 3, 2])
+  })
+
+  it('treats a guess or key of 0 as a real value', () => {
+    const zeroBq = { ...bq, correct_answer: '0' }
+    const all = [ans('a', '0'), ans('b', '2')]
+    expect(all.map((a) => scoreClosestNumber(zeroBq, a, all))).toEqual([3, 2])
+  })
+
+  it('scores 0 when there is no answer key or no answer', () => {
+    const all = [ans('a', '5')]
+    expect(scoreClosestNumber({ ...bq, correct_answer: null }, all[0], all)).toBe(0)
+    expect(scoreClosestNumber(bq, undefined, all)).toBe(0)
+  })
+
+  it('is used by scoreBonusAnswer and ignores the question points', () => {
+    const all = [ans('a', '24'), ans('b', '20')]
+    const big = { ...bq, points: 10 }
+    expect(scoreBonusAnswer(big, all[0], all)).toBe(3)
+    expect(scoreBonusAnswer(big, all[1], all)).toBe(2)
+  })
+})
+
+describe('computeScoreForPlayer with closest_number', () => {
+  it('ranks against every player\'s answers, not just the scored player\'s', () => {
+    const bq = { id: 'q', type: 'closest_number', correct_answer: '24', points: 1 }
+    const mine = { bonus_question_id: 'q', player_id: 'me', answer_text: '20' }
+    const theirs = { bonus_question_id: 'q', player_id: 'them', answer_text: '24' }
+    const { breakdown } = computeScoreForPlayer({
+      episode: {},
+      answer: {},
+      bonusQuestions: [bq],
+      bonusAnswers: [mine],
+      allBonusAnswers: [mine, theirs],
+    })
+    expect(breakdown.bonus_q).toBe(2)
   })
 })

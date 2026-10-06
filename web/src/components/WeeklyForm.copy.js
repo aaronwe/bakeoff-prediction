@@ -16,5 +16,9 @@ export const SUBMIT = 'Submit answers'
 export const SAVED = 'Saved! You can come back and change your answers until scoring.'
 
 export const episodeTitle = (episode) => episodeLabel(episode)
+const POINTS_KIND_BY_TYPE = {
+  baker_multi_pick: QUESTION_KIND.PER_CORRECT,
+  closest_number: QUESTION_KIND.CLOSEST,
+}
 export const bonusPoints = (type, points) =>
-  `(${formatPoints(type === 'baker_multi_pick' ? QUESTION_KIND.PER_CORRECT : QUESTION_KIND.FLAT, points)})`
+  `(${formatPoints(POINTS_KIND_BY_TYPE[type] ?? QUESTION_KIND.FLAT, points)})`

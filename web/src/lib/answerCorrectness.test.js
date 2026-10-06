@@ -53,6 +53,26 @@ describe('bonusTextResult', () => {
   })
 })
 
+describe('bonusTextResult for closest_number', () => {
+  const bq = { id: 'q', type: 'closest_number', correct_answer: '24' }
+  const all = [
+    { bonus_question_id: 'q', answer_text: '24' },
+    { bonus_question_id: 'q', answer_text: '20' },
+    { bonus_question_id: 'q', answer_text: '30' },
+    { bonus_question_id: 'q', answer_text: '30' },
+    { bonus_question_id: 'q', answer_text: '99' },
+  ]
+  it('is correct for any placing that earns points and incorrect otherwise', () => {
+    expect(bonusTextResult(bq, all[0], all)).toBe(CORRECT)
+    expect(bonusTextResult(bq, all[2], all)).toBe(CORRECT)
+    expect(bonusTextResult(bq, all[4], all)).toBe(INCORRECT)
+  })
+  it('is unscored with no answer or no key', () => {
+    expect(bonusTextResult(bq, undefined, all)).toBe(UNSCORED)
+    expect(bonusTextResult({ ...bq, correct_answer: null }, all[0], all)).toBe(UNSCORED)
+  })
+})
+
 describe('bonusBakerResult', () => {
   const bq = { correct_baker_ids: ['a', 'b'] }
   it('judges each baker separately', () => {

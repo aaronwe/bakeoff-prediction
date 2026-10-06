@@ -212,6 +212,20 @@ export default function WeeklyForm({ episode, player, allBakers, activeBakers })
             />
           )
         }
+        if (bq.type === 'closest_number') {
+          return (
+            <label key={bq.id}>
+              {bq.prompt} {copy.bonusPoints(bq.type, bq.points)}
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={bonusAnswerText[bq.id] ?? ''}
+                onChange={(e) => setBonusAnswerText((prev) => ({ ...prev, [bq.id]: e.target.value }))}
+              />
+            </label>
+          )
+        }
         const options = bonusOptionsFor(bq, allBakers, activeBakers)
         return (
           <label key={bq.id}>

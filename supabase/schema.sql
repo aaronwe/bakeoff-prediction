@@ -400,3 +400,13 @@ from (
   from bonus_questions
 ) r
 where r.id = bq.id;
+
+-- ── Closest-to-the-number bonus questions ─────────────────────
+-- "How many times will X be said?" Players guess an integer; the three
+-- closest guesses score 3/2/1 (ties share the higher place). Reuses
+-- answer_text/correct_answer (integers as text), like judge_host_pick, so no
+-- new columns are needed — only the type constraint changes. Ranking happens
+-- in the app (web/src/lib/scoring.js), across all players' answers.
+alter table bonus_questions drop constraint bonus_questions_type_check;
+alter table bonus_questions add constraint bonus_questions_type_check
+  check (type in ('baker_pick', 'multiple_choice', 'free_text', 'baker_multi_pick', 'judge_host_pick', 'closest_number'));

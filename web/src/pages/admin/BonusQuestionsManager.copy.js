@@ -5,11 +5,13 @@ export const TYPE_LABEL = 'Type'
 export const TYPE_BAKER_PICK = 'Pick a baker'
 export const TYPE_BAKER_MULTI_PICK = 'Pick multiple bakers'
 export const TYPE_JUDGE_HOST_PICK = 'Pick a judge or host'
+export const TYPE_CLOSEST_NUMBER = 'Closest to the number'
 export const TYPE_MULTIPLE_CHOICE = 'Multiple choice (custom options)'
 export const TYPE_FREE_TEXT = 'Free text / number'
 export const INCLUDE_ELIMINATED_LABEL = 'Include eliminated bakers'
 export const OPTIONS_LABEL = 'Options (comma-separated)'
 export const POINTS_LABEL = 'Points'
+export const CLOSEST_NUMBER_POINTS_NOTE = 'Scored 3, 2, 1 points for the three closest guesses (ties share the higher place), so there’s no points setting.'
 export const PICK_COUNT_LABEL = 'How many bakers can be picked'
 export const ADD_BONUS_QUESTION = 'Add bonus question'
 
@@ -30,10 +32,13 @@ export const TYPE_LABELS = {
   baker_multi_pick: TYPE_BAKER_MULTI_PICK,
   judge_host_pick: TYPE_JUDGE_HOST_PICK,
   multiple_choice: TYPE_MULTIPLE_CHOICE,
+  closest_number: TYPE_CLOSEST_NUMBER,
   free_text: TYPE_FREE_TEXT,
 }
 export const bonusQuestionLine = (bq) =>
-  `${bq.prompt} — ${TYPE_LABELS[bq.type] ?? bq.type} — ${bq.points} pt${bq.points === 1 ? '' : 's'}`
+  bq.type === 'closest_number'
+    ? `${bq.prompt} — ${TYPE_CLOSEST_NUMBER} — 3/2/1 pts`
+    : `${bq.prompt} — ${TYPE_LABELS[bq.type] ?? bq.type} — ${bq.points} pt${bq.points === 1 ? '' : 's'}`
 export const confirmDelete = (bq, answerCount) =>
   answerCount > 0
     ? `Delete “${bq.prompt}”? This will also remove ${answerCount} player answer${answerCount === 1 ? '' : 's'} and can’t be undone.`

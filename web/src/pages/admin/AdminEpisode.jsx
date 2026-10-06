@@ -396,6 +396,7 @@ function AnswerKeyAndScore({ episode, allBakers, draftAnswerKey, onChanged }) {
         answer,
         bonusQuestions: scoredBonusQuestions ?? [],
         bonusAnswers: bonusAnswers.filter((ba) => ba.player_id === answer.player_id),
+        allBonusAnswers: bonusAnswers,
       })
       const { error: upsertError } = await supabase.from('scores').upsert(
         {

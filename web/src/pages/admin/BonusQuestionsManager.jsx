@@ -18,6 +18,7 @@ function BonusTypeFields({ state, setState, structureLocked }) {
           <option value="baker_pick">{copy.TYPE_BAKER_PICK}</option>
           <option value="baker_multi_pick">{copy.TYPE_BAKER_MULTI_PICK}</option>
           <option value="judge_host_pick">{copy.TYPE_JUDGE_HOST_PICK}</option>
+          <option value="closest_number">{copy.TYPE_CLOSEST_NUMBER}</option>
           <option value="multiple_choice">{copy.TYPE_MULTIPLE_CHOICE}</option>
           <option value="free_text">{copy.TYPE_FREE_TEXT}</option>
         </select>
@@ -93,10 +94,14 @@ function NewBonusQuestionForm({ episodeId, sortOrder, onAdded }) {
         <input required value={prompt} onChange={(e) => setPrompt(e.target.value)} />
       </label>
       <BonusTypeFields state={fields} setState={setFields} structureLocked={false} />
-      <label>
-        {copy.POINTS_LABEL}
-        <input type="number" min="1" value={points} onChange={(e) => setPoints(e.target.value)} />
-      </label>
+      {fields.type === 'closest_number' ? (
+        <p className="note">{copy.CLOSEST_NUMBER_POINTS_NOTE}</p>
+      ) : (
+        <label>
+          {copy.POINTS_LABEL}
+          <input type="number" min="1" value={points} onChange={(e) => setPoints(e.target.value)} />
+        </label>
+      )}
       <button type="submit">{copy.ADD_BONUS_QUESTION}</button>
       {error && <p className="error">{error}</p>}
     </form>
@@ -143,17 +148,23 @@ function BonusQuestionEditForm({ bq, status, onSaved, onCancel }) {
       </label>
       <BonusTypeFields state={fields} setState={setFields} structureLocked={!rules.structure} />
       {!rules.structure && <p className="note">{copy.STRUCTURE_LOCKED_NOTE}</p>}
-      <label>
-        {copy.POINTS_LABEL}
-        <input
-          type="number"
-          min="1"
-          value={points}
-          disabled={!rules.points}
-          onChange={(e) => setPoints(e.target.value)}
-        />
-      </label>
-      {!rules.points && <p className="note">{copy.POINTS_LOCKED_NOTE}</p>}
+      {fields.type === 'closest_number' ? (
+        <p className="note">{copy.CLOSEST_NUMBER_POINTS_NOTE}</p>
+      ) : (
+        <>
+          <label>
+            {copy.POINTS_LABEL}
+            <input
+              type="number"
+              min="1"
+              value={points}
+              disabled={!rules.points}
+              onChange={(e) => setPoints(e.target.value)}
+            />
+          </label>
+          {!rules.points && <p className="note">{copy.POINTS_LOCKED_NOTE}</p>}
+        </>
+      )}
       <button type="submit" disabled={saving}>{saving ? copy.SAVING : copy.SAVE}</button>
       <button type="button" onClick={onCancel} disabled={saving}>{copy.CANCEL}</button>
       {error && <p className="error">{error}</p>}

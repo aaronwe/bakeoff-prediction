@@ -60,6 +60,14 @@ function BonusAnswerKeyFields({ bq, allBakers, groupPrefix, text, setText, baker
       />
     )
   }
+  if (bq.type === 'closest_number') {
+    return (
+      <label className="answer-key-field">
+        {copy.correctAnswerLabel(bq.prompt)}
+        <input type="number" min="0" step="1" value={text} onChange={(e) => setText(e.target.value)} />
+      </label>
+    )
+  }
   // Full roster even for active-only questions: scoring can happen after a
   // baker who was pickable at answer time has since been eliminated.
   const options = bonusOptionsFor(bq, allBakers, allBakers)
@@ -165,7 +173,7 @@ function BonusQuestionRow({ bq, allBakers, draftAnswerKey, onResolved, scoringId
         preserved += 1
         continue
       }
-      const points = scoreBonusAnswer(resolvedBq, ba)
+      const points = scoreBonusAnswer(resolvedBq, ba, bonusAnswers)
       const breakdown = { ...(existing?.points_breakdown ?? {}), [`bonus_${bq.id}`]: points }
       const total = Object.values(breakdown).reduce((sum, v) => sum + v, 0)
       const { error: upsertError } = await supabase.from('scores').upsert(

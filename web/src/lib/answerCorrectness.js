@@ -26,9 +26,11 @@ export function handshakeResult(answer, episode) {
   return scoreHandshake(answer.handshake_guess, episode.handshake_count) > 0 ? CORRECT : INCORRECT
 }
 
-export function bonusTextResult(bonusQuestion, bonusAnswer) {
+// `allAnswersForQuestion` is only needed for closest_number, which is ranked
+// against the other players' guesses.
+export function bonusTextResult(bonusQuestion, bonusAnswer, allAnswersForQuestion) {
   if (!bonusAnswer?.answer_text || !bonusQuestion.correct_answer) return UNSCORED
-  return scoreBonusAnswer(bonusQuestion, bonusAnswer) > 0 ? CORRECT : INCORRECT
+  return scoreBonusAnswer(bonusQuestion, bonusAnswer, allAnswersForQuestion) > 0 ? CORRECT : INCORRECT
 }
 
 // Multi-pick answers are judged per baker, since a player can get some right.
