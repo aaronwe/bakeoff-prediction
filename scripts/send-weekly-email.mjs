@@ -4,6 +4,7 @@ import { sendMail } from './lib/mailer.mjs'
 import { buildWeeklyEmailHtml, buildAdminReminderHtml, htmlToText } from './lib/emailTemplates.mjs'
 import { decideWeeklyAction } from './lib/weeklyEmailDecision.mjs'
 import { episodeLabel } from './lib/episodeLabel.mjs'
+import { buildCumulativeStandings } from './lib/cumulativeStandings.mjs'
 
 // `node send-weekly-email.mjs --test` sends a draft of the current episode's
 // email to the copy recipients only. It ignores lock/sent state and never
@@ -48,18 +49,19 @@ async function buildWeeklyEmail(episode, siteUrl) {
   if (prevEpError) throw prevEpError
 
   if (previousEpisode) {
-    const { data: prevScores, error: prevScoresError } = await supabaseAdmin
+    const { data: scoredEpisodes, error: scoredEpError } = await supabaseAdmin
+      .from('episodes')
+      .select('id')
+      .lte('number', previousEpisode.number)
+    if (scoredEpError) throw scoredEpError
+
+    const { data: allScores, error: allScoresError } = await supabaseAdmin
       .from('scores')
       .select('*')
-      .eq('episode_id', previousEpisode.id)
-    if (prevScoresError) throw prevScoresError
+      .in('episode_id', (scoredEpisodes ?? []).map((e) => e.id))
+    if (allScoresError) throw allScoresError
 
-    const rows = (prevScores ?? [])
-      .map((s) => ({
-        name: players.find((p) => p.id === s.player_id)?.display_name ?? 'Unknown',
-        total: s.total,
-      }))
-      .sort((a, b) => b.total - a.total)
+    const rows = buildCumulativeStandings(allScores ?? [], players)
     previousLeaderboard = { episodeNumber: previousEpisode.number, rows }
   }
 
