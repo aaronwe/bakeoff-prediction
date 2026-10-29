@@ -410,3 +410,90 @@ where r.id = bq.id;
 alter table bonus_questions drop constraint bonus_questions_type_check;
 alter table bonus_questions add constraint bonus_questions_type_check
   check (type in ('baker_pick', 'multiple_choice', 'free_text', 'baker_multi_pick', 'judge_host_pick', 'closest_number'));
+
+-- ── Merge duplicate players ───────────────────────────────────
+-- Players are keyed by email, so someone who signs in with a second address
+-- gets a second player row. The admin "merge players" action calls this to
+-- fold drop_id into keep_id. It has to be a security definer function:
+-- answers/bonus_answers have no admin write policy (RLS only lets a player
+-- touch their own rows, and only while the episode is open), so the client
+-- can't re-point another player's rows itself.
+--
+-- For an episode both players have data for, the player with the higher
+-- scores.total wins and the other's answers, bonus answers and score for that
+-- episode are discarded, so the surviving answers always match the surviving
+-- score. A tie (including an unscored episode) goes to keep_id. Everything
+-- else is re-pointed to keep_id, then drop_id's player row is deleted. The
+-- whole function runs in one transaction.
+create or replace function merge_players(keep_id uuid, drop_id uuid) returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  ep record;
+  keep_total integer;
+  drop_total integer;
+  loser uuid;
+  overlap_count integer := 0;
+  drop_won_numbers integer[] := '{}';
+begin
+  if not is_admin() then
+    raise exception 'only an admin can merge players';
+  end if;
+  if keep_id = drop_id then
+    raise exception 'pick two different players';
+  end if;
+  if (select count(*) from players where id in (keep_id, drop_id)) <> 2 then
+    raise exception 'player not found';
+  end if;
+
+  for ep in
+    select t.episode_id, e.number
+    from (
+      select episode_id, player_id from answers where player_id in (keep_id, drop_id)
+      union
+      select episode_id, player_id from scores where player_id in (keep_id, drop_id)
+      union
+      select bq.episode_id, ba.player_id
+      from bonus_answers ba join bonus_questions bq on bq.id = ba.bonus_question_id
+      where ba.player_id in (keep_id, drop_id)
+    ) t
+    join episodes e on e.id = t.episode_id
+    group by t.episode_id, e.number
+    having count(distinct t.player_id) = 2
+  loop
+    overlap_count := overlap_count + 1;
+    select coalesce(max(total), 0) into keep_total
+      from scores where episode_id = ep.episode_id and player_id = keep_id;
+    select coalesce(max(total), 0) into drop_total
+      from scores where episode_id = ep.episode_id and player_id = drop_id;
+
+    if drop_total > keep_total then
+      loser := keep_id;
+      drop_won_numbers := drop_won_numbers || ep.number;
+    else
+      loser := drop_id;
+    end if;
+
+    delete from answers where episode_id = ep.episode_id and player_id = loser;
+    delete from scores where episode_id = ep.episode_id and player_id = loser;
+    delete from bonus_answers
+      where player_id = loser
+        and bonus_question_id in (select id from bonus_questions where episode_id = ep.episode_id);
+  end loop;
+
+  update answers set player_id = keep_id where player_id = drop_id;
+  update bonus_answers set player_id = keep_id where player_id = drop_id;
+  update scores set player_id = keep_id where player_id = drop_id;
+  delete from players where id = drop_id;
+
+  return jsonb_build_object(
+    'overlapping_episodes', overlap_count,
+    'episodes_won_by_dropped_player', to_jsonb(drop_won_numbers)
+  );
+end;
+$$;
+
+revoke execute on function merge_players(uuid, uuid) from public;
+grant execute on function merge_players(uuid, uuid) to authenticated;
