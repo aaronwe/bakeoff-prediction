@@ -495,5 +495,5 @@ begin
 end;
 $$;
 
-revoke execute on function merge_players(uuid, uuid) from public;
+revoke execute on function merge_players(uuid, uuid) from public, anon;
 grant execute on function merge_players(uuid, uuid) to authenticated;
